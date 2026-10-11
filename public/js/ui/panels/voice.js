@@ -53,7 +53,7 @@ export function mountVoice(root) {
   inSel.onchange = () => mic.isOpen && openMic(); chSel.onchange = () => mic.setChannel(chSel.value);
   outSel.onchange = async () => { try { await app.engine.setOutputDevice(outSel.value); toast(t('Output switched'), 'ok'); } catch (e) { toast(e.message, 'error'); } };
 
-  const offs = [mic.on('level', (l) => {
+  const offs = [mic.on('auto-channel', (c) => { info.textContent = `${mic.info.label} · ${t('Auto')}: ${c === 'mix' ? t('both inputs carry signal') : c === 'left' ? t('using Input 1 / Left (the other input is silent)') : t('using Input 2 / Right (the other input is silent)')}`; }), mic.on('level', (l) => {
     const db = Math.max(-60, l.peakDb); const f = clamp((db + 60) / 60, 0, 1); meterFill.style.width = `${f * 100}%`;
     peakHold = Math.max(f, peakHold - 0.01); peakTick.style.left = `${peakHold * 100}%`;
     meterTxt.textContent = `${l.peakDb > -90 ? l.peakDb.toFixed(1) : '-∞'} dB peak · ${l.rmsDb > -90 ? l.rmsDb.toFixed(0) : '-∞'} dB rms${l.clipped ? ' · CLIP!' : ''}`; meterTxt.style.color = l.clipped ? 'var(--rec)' : '';

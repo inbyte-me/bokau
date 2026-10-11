@@ -29,23 +29,43 @@ export class Mic extends Emitter {
     this.node = new AudioWorkletNode(ctx, 'capture', { numberOfInputs: 1, numberOfOutputs: 1, channelCount: 1, channelCountMode: 'explicit' });
     this.sink = ctx.createGain(); this.sink.gain.value = 0; // keeps the worklet "pulled" without making sound
     this.monGain = ctx.createGain(); this.monGain.gain.value = 0; this.monPan = ctx.createStereoPanner();
-    this.src.connect(this.split); this.mono.connect(this.trim); this.trim.connect(this.node); this.node.connect(this.sink); this.sink.connect(ctx.destination);
+    this.anL = ctx.createAnalyser(); this.anR = ctx.createAnalyser(); this.anL.fftSize = this.anR.fftSize = 2048;
+    this.src.connect(this.split); this.split.connect(this.anL, 0); if ((this.info.channelCount || 1) > 1) this.split.connect(this.anR, 1);
+    this.mono.connect(this.trim); this.trim.connect(this.node); this.node.connect(this.sink); this.sink.connect(ctx.destination);
     this.trim.connect(this.monGain); this.monGain.connect(this.monPan); this.monPan.connect(ctx.destination);
-    this.#route(); this.setGainDb(s.gainDb); this.setMonitor(s.monitor, s.monitorPan);
+    this.#route(); this.setGainDb(s.gainDb); this.setMonitor(s.monitor, s.monitorPan); this.autoChannel = null; this.#watchChannels();
     this.node.port.onmessage = (e) => this.#onMsg(e.data);
     return this.info;
   }
   get channels() { return this.info?.channelCount || 1; }
   #route() {
-    try { this.split.disconnect(); } catch {}
-    const ch = this.settings.channel === 'auto' ? 'mix' : this.settings.channel;
+    try { this.split.disconnect(this.mono); } catch {} // keep the per-channel analysers attached
+    const ch = this.settings.channel === 'auto' ? (this.autoChannel || 'mix') : this.settings.channel;
     if (this.channels < 2 || ch === 'mix') { this.mono.gain.value = this.channels < 2 ? 1 : 0.5; this.split.connect(this.mono, 0); if (this.channels >= 2) this.split.connect(this.mono, 1); }
     else { this.mono.gain.value = 1; this.split.connect(this.mono, ch === 'right' ? 1 : 0); }
+  }
+  /**
+   * "Auto" on a 2-input interface: budget interfaces usually carry the mic on input 1 only. Mixing a dead input in
+   * costs 6 dB and adds its noise, so once one side clearly carries the signal we route just that side.
+   */
+  #watchChannels() {
+    clearInterval(this._chTimer); if (this.channels < 2) return;
+    const buf = new Float32Array(2048); const rms = (an) => { an.getFloatTimeDomainData(buf); let sum = 0; for (const v of buf) sum += v * v; return Math.sqrt(sum / buf.length); };
+    let L = 0, R = 0, n = 0;
+    this._chTimer = setInterval(() => {
+      if (!this.stream || this.settings.channel !== 'auto') { L = R = n = 0; return; }
+      const l = rms(this.anL), r = rms(this.anR); L = Math.max(L * 0.9, l); R = Math.max(R * 0.9, r); n++;
+      if (n < 8) return;
+      const ratioDb = 20 * Math.log10((L + 1e-9) / (R + 1e-9)); let pick = this.autoChannel;
+      if (Math.max(L, R) > 0.003) pick = ratioDb > 18 ? 'left' : ratioDb < -18 ? 'right' : 'mix';
+      if (pick !== this.autoChannel) { this.autoChannel = pick; this.#route(); this.emit('auto-channel', pick); }
+    }, 250);
   }
   setChannel(ch) { this.settings.channel = ch; if (this.split) this.#route(); }
   setGainDb(db) { this.settings.gainDb = db; if (this.trim) this.trim.gain.setTargetAtTime(dbToGain(db), this.engine.ctx.currentTime, 0.02); }
   setMonitor(on, pan = 0) { this.settings.monitor = on; this.settings.monitorPan = pan; if (this.monGain) { this.monGain.gain.setTargetAtTime(on ? 1 : 0, this.engine.ctx.currentTime, 0.02); this.monPan.pan.value = pan; } }
   close() {
+    clearInterval(this._chTimer);
     this.stream?.getTracks().forEach((t) => t.stop());
     for (const n of [this.src, this.split, this.mono, this.trim, this.node, this.sink, this.monGain, this.monPan]) { try { n?.disconnect(); } catch {} }
     this.stream = null;

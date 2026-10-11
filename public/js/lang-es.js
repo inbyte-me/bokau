@@ -167,6 +167,7 @@ export const es = {
   'Zoom the timeline': 'Zoom de la línea de tiempo',
   'TV mode': 'Modo TV',
   'This help': 'Esta ayuda',
+  'both inputs carry signal': 'ambas entradas tienen señal', 'using Input 1 / Left (the other input is silent)': 'usando la Entrada 1 / Izquierda (la otra está en silencio)', 'using Input 2 / Right (the other input is silent)': 'usando la Entrada 2 / Derecha (la otra está en silencio)',
   'bad': 'mal', 'Two people arguing about lost cheese': 'Dos personas discutiendo por un queso perdido',
   'two people arguing about lost cheese': 'dos personas discutiendo por un queso perdido', 'a cooking show where everything catches fire': 'un programa de cocina donde todo se incendia',
   'a dramatic breakup over a WiFi password': 'una ruptura dramática por la contraseña del WiFi', 'two spies who forgot the secret code': 'dos espías que olvidaron la clave secreta', 'a nature documentary about a very lazy cat': 'un documental de naturaleza sobre un gato muy flojo',

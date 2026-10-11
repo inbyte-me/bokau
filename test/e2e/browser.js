@@ -24,22 +24,24 @@ export const exists = (f) => fs.existsSync(f);
  * Deterministic stand-in for a microphone: getUserMedia() returns a stream that loops the given WAV.
  * (Chrome's fake-device flags are flaky in headless mode; real hardware is covered by test/e2e/live-mic.test.js.)
  */
-export async function injectFakeMic(page, wavFile, { channels = 2 } = {}) {
+export async function injectFakeMic(page, wavFile, { channels = 2, only = null, rate = 48000 } = {}) {
   const b64 = fs.readFileSync(wavFile).toString('base64');
-  await page.evaluateOnNewDocument((b64, channels) => {
+  await page.evaluateOnNewDocument((b64, channels, only, rate) => {
     const real = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
     navigator.mediaDevices.getUserMedia = async (c) => {
       if (!c?.audio) return real(c);
-      const ctx = new AudioContext({ sampleRate: 48000 });
+      const ctx = new AudioContext({ sampleRate: rate });
       const ab = Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0)).buffer;
       const buf = await ctx.decodeAudioData(ab);
       const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true;
       const dest = ctx.createMediaStreamDestination(); dest.channelCount = channels; dest.channelCountMode = 'explicit';
-      src.connect(dest); src.start();
+      if (only == null) src.connect(dest);
+      else { const sp = ctx.createChannelSplitter(1); const mg = ctx.createChannelMerger(channels); src.connect(sp); sp.connect(mg, 0, only); mg.connect(dest); } // signal on one input only, like a budget interface
+      src.start();
       const stream = dest.stream; const tr = stream.getAudioTracks()[0];
       Object.defineProperty(tr, 'label', { value: 'Test microphone (synthetic)' });
-      const gs = tr.getSettings.bind(tr); tr.getSettings = () => ({ ...gs(), channelCount: channels, sampleRate: 48000, deviceId: 'default' });
+      const gs = tr.getSettings.bind(tr); tr.getSettings = () => ({ ...gs(), channelCount: channels, sampleRate: rate, deviceId: 'default' });
       return stream;
     };
-  }, b64, channels);
+  }, b64, channels, only, rate);
 }
