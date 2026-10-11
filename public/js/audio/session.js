@@ -47,6 +47,7 @@ export class RecordSession extends Emitter {
         if (this.stopRequested) break;
         const startFrame = await mic.startCapture();
         await engine.playAt(start, goAt, { to: end ?? dur });
+        if (!this.stopRequested) { await this.#waitUntil(goAt); if (preRoll >= 1) this.emit('countdown', 0); }
         this.state = 'recording'; this.emit('state', 'recording', { pass, start, end });
         const liveDuck = engine.handle?.nodes?.liveDuck; const offLevel = this.#liveDucking(liveDuck, p);
         // 3. wait for range end or user stop
@@ -73,9 +74,9 @@ export class RecordSession extends Emitter {
     let last = -1; const ctx = this.engine.ctx;
     const f = () => {
       if (this.state !== 'countdown') return;
-      const left = Math.ceil(goAt - ctx.currentTime - 0.02);
-      if (left !== last && left >= 0) { last = left; this.emit('countdown', left > n ? n : left); }
-      if (ctx.currentTime < goAt) requestAnimationFrame(f);
+      const r = goAt - ctx.currentTime; const v = r > 0 ? Math.min(n, Math.ceil(r)) : 0;
+      if (v !== last && v > 0) { last = v; if (n > 0) this.emit('countdown', v); }
+      if (r > -0.2) requestAnimationFrame(f);
     };
     f();
   }

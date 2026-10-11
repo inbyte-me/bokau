@@ -15,7 +15,7 @@ export class Stage {
       app.engine.on('time', (tm) => this.banner.classList.contains('off') ? 0 : this.kara.update(tm)),
       app.engine.on('pause', () => this.kara.update(app.engine.time)),
       app.session.on('countdown', (n) => this.#countdown(n)),
-      app.session.on('state', (s) => { this.rec.classList.toggle('hidden', s !== 'recording'); if (s !== 'countdown') this.count.replaceChildren(); }),
+      app.session.on('state', (s) => { this.rec.classList.toggle('hidden', s !== 'recording'); if (s === 'idle') this.count.replaceChildren(); else if (s === 'recording') setTimeout(() => this.count.replaceChildren(), 600); }),
     ];
   }
   showBanner(on) { this.banner.classList.toggle('off', !on); if (!on) this.banner.classList.add('hidden'); else this.kara.update(app.engine.time); }

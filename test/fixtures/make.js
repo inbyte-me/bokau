@@ -23,6 +23,11 @@ export function make({ force = false } = {}) {
   speech('speech_en', 'Samantha', 'Hello there. I would like a cup of coffee, please. Do you have any cheese?');
   speech('speech_es', 'Paulina', 'Hola, buenos días. Quisiera un café, por favor. ¿Tienen queso?');
 
+  // fake-microphone feed for headless Chrome: plain 44-byte-header 16-bit PCM (Chrome rejects files with LIST chunks)
+  if (need('mic_speech.wav')) {
+    ff('-i', f('speech_en.wav'), '-i', f('speech_es.wav'), '-filter_complex', '[0]apad=pad_dur=0.5[a];[1]apad=pad_dur=0.5[b];[a][b]concat=n=2:v=0:a=1', '-ar', '48000', '-ac', '1', '-c:a', 'pcm_s16le', '-fflags', '+bitexact', '-flags:a', '+bitexact', '-map_metadata', '-1', f('mic_speech.wav'));
+  }
+
   // music: chord left-heavy + bass + noise hits, stereo with real width
   if (need('music.wav')) {
     ff('-f', 'lavfi', '-i', 'sine=f=220:d=14', '-f', 'lavfi', '-i', 'sine=f=277:d=14', '-f', 'lavfi', '-i', 'sine=f=330:d=14', '-f', 'lavfi', '-i', 'sine=f=55:d=14',

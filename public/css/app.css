@@ -81,7 +81,7 @@ kbd { font-family: var(--mono); font-size: .8em; background: var(--panel3); bord
 .fields { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem; }
 
 /* ---------- studio layout ---------- */
-.studio { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 360px; grid-template-rows: minmax(0, 1fr) auto 300px; grid-template-areas: "stage side" "transport transport" "timeline timeline"; }
+.studio { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 360px; grid-template-rows: minmax(0, 1fr) auto 336px; grid-template-areas: "stage side" "transport transport" "timeline timeline"; }
 .studio.compact-tl { grid-template-rows: minmax(0, 1fr) auto 220px; }
 .stage-wrap { grid-area: stage; display: flex; flex-direction: column; min-height: 0; padding: .6rem; gap: .5rem; }
 .stage { position: relative; flex: 1; min-height: 120px; background: #000; border-radius: 12px; overflow: hidden; display: grid; place-items: center; }

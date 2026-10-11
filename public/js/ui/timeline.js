@@ -5,7 +5,7 @@ import { drawWave } from '../audio/peaks.js';
 import { FX_INFO } from '../audio/fx.js';
 import { newCue, newId, newTrack, pickColor, carveClips } from '/shared/project.js';
 
-const H = { ruler: 28, thumbs: 48, orig: 74, cues: 40, flaps: 24, track: 70 };
+const H = { ruler: 28, thumbs: 42, orig: 66, cues: 36, flaps: 22, track: 64 };
 const HASH = (s) => { let x = 0; for (const c of s || '') x = (x * 31 + c.charCodeAt(0)) >>> 0; return x; };
 export const cueColor = (c) => (c.character ? pickColor(HASH(c.character)) : '#ffd166');
 

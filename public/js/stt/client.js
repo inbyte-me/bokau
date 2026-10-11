@@ -13,7 +13,16 @@ export async function load16k(url) {
   const buf = await ctx.decodeAudioData(ab);
   const out = new Float32Array(buf.length);
   for (let c = 0; c < buf.numberOfChannels; c++) { const d = buf.getChannelData(c); for (let i = 0; i < out.length; i++) out[i] += d[i] / buf.numberOfChannels; }
-  return out;
+  return normalizePeak(out);
+}
+
+/** Quiet budget-mic recordings confuse speech models: bring the peak to about -3 dBFS (max +30 dB, never attenuate loud audio much). */
+export function normalizePeak(x, target = 0.7, maxGainDb = 30) {
+  let peak = 0; for (let i = 0; i < x.length; i++) { const a = Math.abs(x[i]); if (a > peak) peak = a; }
+  if (peak < 1e-4) return x;
+  const g = Math.min(target / peak, 10 ** (maxGainDb / 20));
+  if (g > 1.05) for (let i = 0; i < x.length; i++) x[i] *= g;
+  return x;
 }
 
 let worker = null;
