@@ -32,7 +32,7 @@ export function defaultProject({ id, name = 'Untitled', mode = 'pro' } = {}) {
 }
 
 export function newTrack(o = {}) {
-  return { id: newId('t'), name: 'Voice', kind: 'voice', color: pickColor(o.index || 0), volume: 1, pan: 0, mute: false, solo: false, fx: 'none', fxAmount: 1, micFix: true, nudgeMs: 0, clips: [], ...o };
+  return { id: newId('t'), name: 'Voice', kind: 'voice', color: pickColor(o.index || 0), volume: 1, pan: 0, mute: false, solo: false, fx: 'none', fxAmount: 1, micFix: true, nudgeMs: 0, clips: [], takes: [], ...o };
 }
 export function newCue(o = {}) {
   return { id: newId('c'), start: 0, end: 1, text: '', character: '', note: '', ...o };
@@ -70,7 +70,7 @@ export function migrate(p) {
   out.ducking = { ...d.ducking, ...p.ducking };
   out.settings = { ...d.settings, ...p.settings };
   out.party = { ...d.party, ...p.party };
-  out.tracks = (p.tracks?.length ? p.tracks : d.tracks).map((t, i) => ({ ...newTrack({ index: i }), ...t, clips: t.clips || [] }));
+  out.tracks = (p.tracks?.length ? p.tracks : d.tracks).map((t, i) => ({ ...newTrack({ index: i }), ...t, clips: t.clips || [], takes: t.takes || [] }));
   out.version = PROJECT_VERSION;
   return out;
 }
