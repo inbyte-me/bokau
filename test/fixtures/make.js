@@ -87,6 +87,8 @@ export function make({ force = false } = {}) {
     fs.writeFileSync(f('rec_stream_audio.webm'), buf);
   }
 
+  if (need('clip_1080.mp4')) ff('-f', 'lavfi', '-i', 'testsrc2=s=1920x1080:r=25:d=4', '-f', 'lavfi', '-i', 'sine=f=300:d=4', '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', f('clip_1080.mp4'));
+
   if (need('clip_mov.mov')) ff('-i', f('clip_en.mp4'), '-t', '6', '-c:v', 'copy', '-c:a', 'aac', '-f', 'mov', f('clip_mov.mov'));
 
   if (!fs.existsSync(f('sample.srt'))) {

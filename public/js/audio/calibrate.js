@@ -1,7 +1,7 @@
 // Round-trip latency measurement: play chirps through the speakers/headphones, hear them on the mic,
 // cross-correlate. Works with speakers near the mic (TV!), or an interface loopback / headphone held to the mic.
 
-export function makeChirp(sr, ms = 14, f0 = 1500, f1 = 7000) {
+export function makeChirp(sr, ms = 50, f0 = 600, f1 = 8000) {
   const n = Math.round((sr * ms) / 1000), out = new Float32Array(n);
   for (let i = 0; i < n; i++) {
     const t = i / sr, T = n / sr; const ph = 2 * Math.PI * (f0 * t + ((f1 - f0) / (2 * T)) * t * t);
@@ -30,22 +30,26 @@ export function measureDelays(rec, template, sr, startFrame, emitFrames, searchS
     if (bi < 0) continue;
     delays.push(((startFrame + bi) - e) / sr * 1000); conf.push(best / (sum / cnt + 1e-9));
   }
-  if (!delays.length) return { ms: null, delays, confidence: 0 };
-  const sorted = [...delays].sort((a, b) => a - b); const ms = sorted[Math.floor(sorted.length / 2)];
-  const spread = Math.max(...delays) - Math.min(...delays);
+  if (!delays.length) return { ms: null, delays, confidence: 0, ok: false };
+  // Trust only a delay that most clicks agree on. Round trips under 3 ms are impossible (they are cross-talk or room noise).
+  const plausible = delays.filter((d) => d >= 3);
+  let best = []; for (const d of plausible) { const near = plausible.filter((x) => Math.abs(x - d) <= 4); if (near.length > best.length) best = near; }
+  const need = Math.max(3, Math.ceil(delays.length * 0.6));
+  const sorted = [...best].sort((a, b) => a - b); const ms = sorted.length ? sorted[Math.floor(sorted.length / 2)] : null;
   const confidence = conf.reduce((a, b) => a + b, 0) / conf.length;
-  return { ms, delays, confidence, spreadMs: spread, ok: confidence > 6 && spread < 12 };
+  const spreadMs = best.length ? Math.max(...best) - Math.min(...best) : null;
+  return { ms, delays, confidence, spreadMs, agreeing: best.length, ok: best.length >= need && confidence > 6 };
 }
 
 /** Full procedure using the live engine + mic. Returns measureDelays() result. */
-export async function calibrateLatency(engine, mic, { count = 5, gap = 0.6 } = {}) {
+export async function calibrateLatency(engine, mic, { count = 6, gap = 0.7 } = {}) {
   const ctx = engine.ctx; const sr = ctx.sampleRate; const chirp = makeChirp(sr);
   await engine.resume();
   const buf = ctx.createBuffer(1, chirp.length, sr); buf.copyToChannel(chirp, 0);
   const startFrame = await mic.startCapture();
   const t0 = ctx.currentTime + 0.4; const emit = [];
   for (let k = 0; k < count; k++) {
-    const src = ctx.createBufferSource(); src.buffer = buf; const g = ctx.createGain(); g.gain.value = 0.8;
+    const src = ctx.createBufferSource(); src.buffer = buf; const g = ctx.createGain(); g.gain.value = 0.9;
     src.connect(g); g.connect(ctx.destination); const at = t0 + k * gap; src.start(at); emit.push(Math.round(at * sr));
   }
   await new Promise((r) => setTimeout(r, (0.4 + count * gap + 1.0) * 1000));
