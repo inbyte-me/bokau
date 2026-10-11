@@ -16,7 +16,14 @@ test('REAL MIC: open, meter, record a take through the studio, transcribe it on-
     await page.evaluate(() => window.__app.store.commit('x', (p) => { p.settings.preRoll = 1; p.settings.output = 'speakers'; p.settings.muteOriginalWhileRecording = true; }, ['settings']));
     await page.click('#tab-voice'); await page.click('#mic-open');
     await page.waitForFunction(() => window.__app.mic.isOpen, { timeout: 15000 });
+    await page.waitForFunction(() => document.querySelectorAll('#mic-device option').length > 0, { timeout: 10000 });
+    if (process.env.LIVE_DEVICE) { // e.g. LIVE_DEVICE="USB Audio" -> pick the interface instead of the default input
+      const pick = await page.evaluate((re) => { const o = [...document.querySelectorAll('#mic-device option')].find((x) => new RegExp(re, 'i').test(x.textContent)); if (!o) return null; document.querySelector('#mic-device').value = o.value; document.querySelector('#mic-device').dispatchEvent(new Event('change')); return o.textContent; }, process.env.LIVE_DEVICE);
+      assert.ok(pick, `no input device matching /${process.env.LIVE_DEVICE}/ — saw: ` + (await page.$$eval('#mic-device option', (o) => o.map((x) => x.textContent).join(' | '))));
+      console.log('   selected device:', pick); await wait(1200);
+    }
     const info = await page.evaluate(() => ({ ...window.__app.mic.info }));
+    const info2 = await page.evaluate(() => ({ ...window.__app.mic.info })); Object.assign(info, info2);
     console.log('   device:', info.label, '|', info.channelCount, 'ch |', info.sampleRate, 'Hz');
     const devices = await page.$$eval('#mic-device option', (o) => o.map((x) => x.textContent)); console.log('   inputs listed:', devices.join(' / '));
     // level meter sees real signal
