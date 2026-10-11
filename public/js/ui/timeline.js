@@ -1,5 +1,6 @@
 import { h, clamp, clear } from '../util.js';
 import { t } from '../i18n.js';
+import { icon } from '../icons.js';
 import { app } from '../app.js';
 import { drawWave } from '../audio/peaks.js';
 import { FX_INFO } from '../audio/fx.js';
@@ -7,7 +8,7 @@ import { newCue, newId, newTrack, pickColor, carveClips } from '/shared/project.
 
 const H = { ruler: 28, thumbs: 42, orig: 66, cues: 36, flaps: 22, track: 64 };
 const HASH = (s) => { let x = 0; for (const c of s || '') x = (x * 31 + c.charCodeAt(0)) >>> 0; return x; };
-export const cueColor = (c) => (c.character ? pickColor(HASH(c.character)) : '#ffd166');
+export const cueColor = (c) => (c.character ? pickColor(HASH(c.character)) : '#e3b04b');
 
 /**
  * Multi-lane timeline: ruler / video thumbnails / original audio / cues / lip-flap / voice tracks.
@@ -69,18 +70,19 @@ export class Timeline {
   // ----- toolbar + headers -----
   #toolbar() {
     const b = (label, fn, title, id) => h('button.icon', { title, id, onclick: fn }, label);
-    return h('div.tl-toolbar', b('－', () => this.zoom(0.7), t('Zoom out (-)'), 'zoom-out'), b('＋', () => this.zoom(1.4), t('Zoom in (+)'), 'zoom-in'), b('⤢', () => this.fit(), t('Fit to window'), 'zoom-fit'),
-      h('div.sep'), b('＋ ' + t('Voice track'), () => this.addTrack(), t('Add a voice track (another character or take lane)'), 'add-track'),
-      b('✂ ' + t('Split'), () => this.splitAtPlayhead(), t('Split the selected clip at the playhead (S)'), 'split-btn'),
-      b('🗑', () => this.deleteSelected(), t('Delete selected clip / cue (Del)'), 'del-btn'),
-      h('div.sep'), b('⟲ ' + t('Loop'), () => this.loopFromSelection(), t('Loop the selected cue or the dragged range (L)'), 'loop-btn'),
+    const bt = (ic, text, fn, title, id) => h('button', { title, id, onclick: fn }, icon(ic), text);
+    return h('div.tl-toolbar', b(icon('minus'), () => this.zoom(0.7), t('Zoom out (-)'), 'zoom-out'), b(icon('plus'), () => this.zoom(1.4), t('Zoom in (+)'), 'zoom-in'), b(icon('fit'), () => this.fit(), t('Fit to window'), 'zoom-fit'),
+      h('div.sep'), bt('plus', t('Voice track'), () => this.addTrack(), t('Add a voice track (another character or take lane)'), 'add-track'),
+      bt('split', t('Split'), () => this.splitAtPlayhead(), t('Split the selected clip at the playhead (S)'), 'split-btn'),
+      b(icon('trash'), () => this.deleteSelected(), t('Delete selected clip / cue (Del)'), 'del-btn'),
+      h('div.sep'), bt('loop', t('Loop'), () => this.loopFromSelection(), t('Loop the selected cue or the dragged range (L)'), 'loop-btn'),
       h('div.row#marks-bar', { title: t('Marks: ⌘/Ctrl+number sets, ⌥/Option+number jumps (Shift+number also sets)') }),
       h('span.hint', { style: { marginLeft: '.6rem' } }, t('Drag the ruler to scrub · Shift+drag to set a punch/loop range · Ctrl+wheel to zoom')));
   }
   addTrack() { app.store.commit('Add track', (p) => { const tr = newTrack({ name: `${t('Voice')} ${p.tracks.length + 1}`, index: p.tracks.length }); p.tracks.push(tr); app.select({ trackId: tr.id }); }, ['tracks']); }
   #marksBar() {
     const bar = this.toolbar.querySelector('#marks-bar'); if (!bar) return; clear(bar);
-    const ms = this.p.markers || []; bar.append(h('span.small.dim', '🚩'));
+    const ms = this.p.markers || []; bar.append(h('span.small.dim', icon('flag')));
     if (!ms.length) bar.append(h('span.small.faint', t('⌘/Ctrl+1…9 set a mark · ⌥/Option+1…9 jump')));
     for (const m of ms) bar.append(h('button.chip.mark', { dataset: { n: m.n }, title: t('Jump to mark {n} (⌥{n}) — right-click to delete', { n: m.n }), onclick: () => app.emit('jump-mark', m.n), oncontextmenu: (e) => { e.preventDefault(); app.emit('delete-mark', m.n); } }, `${m.n} · ${Math.floor(m.t / 60)}:${(m.t % 60).toFixed(1).padStart(4, '0')}`));
   }
@@ -91,16 +93,16 @@ export class Timeline {
     for (const r of rows) {
       const hd = h('div.tl-head', { style: { height: r.h + 'px' } });
       if (r.k === 'ruler') hd.append(h('div.small.dim', t('Timeline')), h('div.mono.small.dim', `${p.media.width}×${p.media.height} · ${p.media.fps}fps`));
-      else if (r.k === 'thumbs') hd.append(h('div.name', '🎞 ' + t('Video')));
+      else if (r.k === 'thumbs') hd.append(h('div.name', t('Video')));
       else if (r.k === 'orig') {
         const o = p.original; const stems = p.stems?.status === 'ready';
-        hd.append(h('div.name', '🔊 ' + t('Original audio') + (stems ? ' ✂' : '')),
+        hd.append(h('div.name', t('Original audio')),
           h('div.btns', h('button' + (o.mute ? '.on' : ''), { title: t('Mute original'), onclick: () => this.tog('original', 'mute') }, 'M'), h('button' + (o.solo ? '.on' : ''), { title: t('Solo original'), onclick: () => this.tog('original', 'solo') }, 'S'),
             h('input', { type: 'range', min: 0, max: 1.5, step: 0.01, value: o.volume, title: t('Original volume'), oninput: (e) => { app.store.silent((pr) => { pr.original.volume = +e.target.value; }, ['levels']); app.engine.applyLevels(); }, onchange: () => app.store.commit('Original volume', () => {}, ['levels'], { merge: true }) })),
           stems ? h('select', { title: t('Which part of the original to play'), onchange: (e) => { app.store.commit('Original source', (pr) => { pr.original.source = e.target.value; }, ['levels']); app.engine.refresh(); } },
             ...[['full', t('Full mix')], ['bg', t('Music + SFX only')], ['dialogue', t('Dialogue only')]].map(([v, l]) => h('option', { value: v, selected: o.source === v }, l))) : null);
-      } else if (r.k === 'cues') hd.append(h('div.name', '💬 ' + t('Cue lane')), h('div.small.dim', t('Double-click to add')));
-      else if (r.k === 'flaps') hd.append(h('div.name', '👄 ' + t('Lip flaps')), h('div.small.dim', t('Drag to draw mouth-open')));
+      } else if (r.k === 'cues') hd.append(h('div.name', t('Cue lane')), h('div.small.dim', t('Double-click to add')));
+      else if (r.k === 'flaps') hd.append(h('div.name', t('Lip flaps')), h('div.small.dim', t('Drag to draw mouth-open')));
       else {
         const tr = p.tracks.find((x) => x.id === r.id); const sel = app.sel.trackId === tr.id || (!app.sel.trackId && tr === p.tracks[0]);
         hd.classList.toggle('sel', sel); hd.dataset.track = tr.id;
@@ -110,9 +112,9 @@ export class Timeline {
         hd.append(h('div.name', h('span.swatch', { style: { background: tr.color } }), h('input.nm', { value: tr.name, title: t('Rename'), onchange: (e) => app.store.commit('Rename track', () => { tr.name = e.target.value; }, ['tracks']), onclick: (e) => e.stopPropagation() })),
           h('div.btns', h('button' + (tr.mute ? '.on' : ''), { title: t('Mute'), onclick: (e) => { e.stopPropagation(); this.tog(tr.id, 'mute'); } }, 'M'), h('button' + (tr.solo ? '.on' : ''), { title: t('Solo'), onclick: (e) => { e.stopPropagation(); this.tog(tr.id, 'solo'); } }, 'S'),
             h('input', { type: 'range', min: 0, max: 1.6, step: 0.01, value: tr.volume, title: t('Track volume'), onclick: (e) => e.stopPropagation(), oninput: (e) => { tr.volume = +e.target.value; app.engine.applyLevels(); app.store.silent(() => {}, ['levels']); }, onchange: () => app.store.commit('Track volume', () => {}, ['levels'], { merge: true }) }),
-            p.tracks.length > 1 ? h('button.ghost', { title: t('Remove track'), onclick: (e) => { e.stopPropagation(); if (!tr.clips.length || confirm(t('Remove this track and its clips?'))) app.store.commit('Remove track', (pr) => { pr.tracks = pr.tracks.filter((x) => x.id !== tr.id); }, ['tracks']); } }, '✕') : null),
+            p.tracks.length > 1 ? h('button.ghost', { title: t('Remove track'), onclick: (e) => { e.stopPropagation(); if (!tr.clips.length || confirm(t('Remove this track and its clips?'))) app.store.commit('Remove track', (pr) => { pr.tracks = pr.tracks.filter((x) => x.id !== tr.id); }, ['tracks']); } }, icon('close', 12)) : null),
           h('select', { title: t('Voice effect'), onclick: (e) => e.stopPropagation(), onchange: (e) => { app.store.commit('Voice effect', () => { tr.fx = e.target.value; }, ['tracks']); app.engine.refresh(); } },
-            ...Object.entries(FX_INFO).map(([k, v]) => h('option', { value: k, selected: tr.fx === k }, `${v.emoji} ${t(v.label)}`))));
+            ...Object.entries(FX_INFO).map(([k, v]) => h('option', { value: k, selected: tr.fx === k }, t(v.label)))));
       }
       this.heads.append(hd);
     }
@@ -134,19 +136,19 @@ export class Timeline {
     const { pps, t0 } = app.view; const t1 = t0 + W / pps; const p = this.p; const A = app.engine.assets;
     this.#loadThumbs();
     c.font = '11px ui-monospace, Menlo, monospace'; c.textBaseline = 'middle';
-    rows.forEach((r, i) => { c.fillStyle = i % 2 ? '#15161a' : '#18191e'; c.fillRect(0, r.y, W, r.h); c.fillStyle = '#2a2d36'; c.fillRect(0, r.y + r.h - 1, W, 1); });
+    rows.forEach((r, i) => { c.fillStyle = i % 2 ? '#151514' : '#181817'; c.fillRect(0, r.y, W, r.h); c.fillStyle = '#2e2d29'; c.fillRect(0, r.y + r.h - 1, W, 1); });
     // grid
     const step = [0.1, 0.25, 0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300].find((s) => s * pps >= 70) || 600;
-    c.fillStyle = '#20222a'; for (let s = Math.ceil(t0 / step) * step; s < t1; s += step) c.fillRect(this.t2x(s), H.ruler, 1, this.totalH - H.ruler);
+    c.fillStyle = '#21211e'; for (let s = Math.ceil(t0 / step) * step; s < t1; s += step) c.fillRect(this.t2x(s), H.ruler, 1, this.totalH - H.ruler);
     // ruler
-    c.fillStyle = '#8c93a3'; c.textAlign = 'left';
+    c.fillStyle = '#a8a59c'; c.textAlign = 'left';
     for (let s = Math.ceil(t0 / step) * step; s < t1; s += step) { const x = this.t2x(s); c.fillRect(x, H.ruler - 8, 1, 8); c.fillText(fmtRuler(s, step), x + 4, 12); }
     c.font = 'bold 10px ui-monospace, Menlo, monospace';
     for (const m of p.markers || []) { const mx = this.t2x(m.t); if (mx < -20 || mx > W + 20) continue; c.fillStyle = 'rgba(255,200,87,.55)'; c.fillRect(mx, 0, 1, this.totalH); c.fillStyle = '#ffc857'; c.fillRect(mx, 0, 16, 13); c.beginPath(); c.moveTo(mx + 16, 0); c.lineTo(mx + 21, 6.5); c.lineTo(mx + 16, 13); c.fill(); c.fillStyle = '#1a1405'; c.textAlign = 'left'; c.fillText(String(m.n), mx + 4, 7); }
     c.font = '11px ui-monospace, Menlo, monospace';
     // loop / punch region
     const reg = app.sel.region || p.loop;
-    if (reg) { const x0 = this.t2x(reg.start), x1 = this.t2x(reg.end); c.fillStyle = 'rgba(255,90,79,.14)'; c.fillRect(x0, 0, x1 - x0, this.totalH); c.fillStyle = 'rgba(255,90,79,.8)'; c.fillRect(x0, 0, x1 - x0, 3); c.fillRect(x0, 0, 2, this.totalH); c.fillRect(x1 - 2, 0, 2, this.totalH); }
+    if (reg) { const x0 = this.t2x(reg.start), x1 = this.t2x(reg.end); c.fillStyle = 'rgba(212,57,44,.13)'; c.fillRect(x0, 0, x1 - x0, this.totalH); c.fillStyle = 'rgba(212,57,44,.9)'; c.fillRect(x0, 0, x1 - x0, 3); c.fillRect(x0, 0, 2, this.totalH); c.fillRect(x1 - 2, 0, 2, this.totalH); }
     // thumbnails
     const th = rows[1]; const T = p.media.thumbs;
     if (T && this.thumbImg instanceof Image) {
@@ -163,8 +165,8 @@ export class Timeline {
       const stems = p.stems?.status === 'ready' && A.peaks.get('bg');
       const dim = p.original.mute ? 0.35 : 1;
       c.globalAlpha = dim;
-      if (stems) { drawWave(c, A.peaks.get('bg'), { x0: 0, x1: W, y: o.y + 2, h: o.h / 2 - 2, t0, t1, color: '#4f86c9' }); drawWave(c, A.peaks.get('dialogue'), { x0: 0, x1: W, y: o.y + o.h / 2, h: o.h / 2 - 2, t0, t1, color: '#e9965a' }); c.fillStyle = '#7d8498'; c.fillText(t('music+sfx'), 6, o.y + 8); c.fillText(t('dialogue'), 6, o.y + o.h / 2 + 8); }
-      else drawWave(c, A.peaks.get('orig'), { x0: 0, x1: W, y: o.y + 2, h: o.h - 4, t0, t1, color: '#5f93d0' });
+      if (stems) { drawWave(c, A.peaks.get('bg'), { x0: 0, x1: W, y: o.y + 2, h: o.h / 2 - 2, t0, t1, color: '#6f8196' }); drawWave(c, A.peaks.get('dialogue'), { x0: 0, x1: W, y: o.y + o.h / 2, h: o.h / 2 - 2, t0, t1, color: '#b49a7a' }); c.fillStyle = '#8a877e'; c.fillText(t('music+sfx'), 6, o.y + 8); c.fillText(t('dialogue'), 6, o.y + o.h / 2 + 8); }
+      else drawWave(c, A.peaks.get('orig'), { x0: 0, x1: W, y: o.y + 2, h: o.h - 4, t0, t1, color: '#7f8a96' });
       // ducking preview
       if (p.ducking.enabled && app.engine.handle?.duckCurve) { /* drawn below */ }
       c.globalAlpha = 1;
@@ -174,12 +176,12 @@ export class Timeline {
     for (const cue of p.cues) {
       if (cue.end < t0 || cue.start > t1) continue;
       const x0 = this.t2x(cue.start), x1 = this.t2x(cue.end), col = cueColor(cue); const sel = app.sel.cueId === cue.id;
-      c.fillStyle = col + (sel ? 'ee' : '99'); roundRect(c, x0, cr.y + 4, Math.max(3, x1 - x0), cr.h - 8, 5); c.fill();
+      c.fillStyle = col + (sel ? 'f0' : 'a0'); roundRect(c, x0, cr.y + 4, Math.max(3, x1 - x0), cr.h - 8, 5); c.fill();
       if (sel) { c.strokeStyle = '#fff'; c.lineWidth = 1.5; c.stroke(); }
-      c.save(); c.beginPath(); c.rect(x0 + 3, cr.y, Math.max(0, x1 - x0 - 6), cr.h); c.clip(); c.fillStyle = '#111'; c.textAlign = 'left'; c.fillText((cue.character ? cue.character + ': ' : '') + cue.text, x0 + 6, cr.y + cr.h / 2); c.restore();
+      c.save(); c.beginPath(); c.rect(x0 + 3, cr.y, Math.max(0, x1 - x0 - 6), cr.h); c.clip(); c.fillStyle = '#14110a'; c.textAlign = 'left'; c.fillText((cue.character ? cue.character + ': ' : '') + cue.text, x0 + 6, cr.y + cr.h / 2); c.restore();
     }
     // lip flaps
-    const fl = rows[4]; c.fillStyle = '#ff8fb8';
+    const fl = rows[4]; c.fillStyle = '#cfc9b8';
     for (const f of p.lipFlaps) { if (f.end < t0 || f.start > t1) continue; roundRect(c, this.t2x(f.start), fl.y + 4, Math.max(2, this.t2x(f.end) - this.t2x(f.start)), fl.h - 8, 4); c.fill(); }
     // tracks
     const soloAny = p.original.solo || p.tracks.some((x) => x.solo);
@@ -198,11 +200,11 @@ export class Timeline {
     });
     // ducking envelope overlay on the original lane
     const dc = app.engine.handle?.duckCurve;
-    if (dc && p.ducking.enabled) { c.strokeStyle = 'rgba(61,220,192,.9)'; c.lineWidth = 1.5; c.beginPath(); let started = false; for (let x = 0; x < W; x += 2) { const i = Math.floor(this.x2t(x) * dc.rate); const g = dc.curve[i] ?? 1; const y = o.y + o.h - 4 - g * (o.h - 8); started ? c.lineTo(x, y) : (c.moveTo(x, y), started = true); } c.stroke(); }
+    if (dc && p.ducking.enabled) { c.strokeStyle = 'rgba(235,233,228,.85)'; c.lineWidth = 1.25; c.beginPath(); let started = false; for (let x = 0; x < W; x += 2) { const i = Math.floor(this.x2t(x) * dc.rate); const g = dc.curve[i] ?? 1; const y = o.y + o.h - 4 - g * (o.h - 8); started ? c.lineTo(x, y) : (c.moveTo(x, y), started = true); } c.stroke(); }
     // playhead
-    const px = this.t2x(app.engine.time); if (px >= -1 && px <= W + 1) { c.fillStyle = '#ff3b30'; c.fillRect(px - 0.5, 0, 1.5, this.totalH); c.beginPath(); c.moveTo(px - 6, 0); c.lineTo(px + 6, 0); c.lineTo(px, 9); c.fill(); }
+    const px = this.t2x(app.engine.time); if (px >= -1 && px <= W + 1) { c.fillStyle = '#e8473a'; c.fillRect(px - 0.5, 0, 1.5, this.totalH); c.beginPath(); c.moveTo(px - 6, 0); c.lineTo(px + 6, 0); c.lineTo(px, 9); c.fill(); }
     // recording tint
-    if (app.session.state === 'recording') { c.fillStyle = 'rgba(255,59,48,.07)'; c.fillRect(0, 0, W, this.totalH); }
+    if (app.session.state === 'recording') { c.fillStyle = 'rgba(212,57,44,.07)'; c.fillRect(0, 0, W, this.totalH); }
     this.#sbar();
   }
 

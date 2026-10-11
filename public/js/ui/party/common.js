@@ -1,5 +1,6 @@
 import { h, clear, toast, clamp } from '../../util.js';
 import { t } from '../../i18n.js';
+import { icon } from '../../icons.js';
 import { app } from '../../app.js';
 import { api } from '../../api.js';
 import { newCue, newId, newTrack, pickColor } from '/shared/project.js';
@@ -12,17 +13,17 @@ import { FX_INFO } from '../../audio/fx.js';
 export function audioSetupModal() {
   const back = h('div.modal-back', { onclick: (e) => e.target === back && close() }); const close = () => { m.destroy?.(); back.remove(); };
   const body = h('div.col'); const m = mountVoice(body);
-  back.append(h('div.modal', h('h2', '🎧 ' + t('Audio setup')), body, h('div.actions', h('button.primary', { id: 'audio-setup-done', onclick: close }, t('Done')))));
+  back.append(h('div.modal', h('h2', t('Audio setup')), body, h('div.actions', h('button.primary', { id: 'audio-setup-done', onclick: close }, t('Done')))));
   document.body.append(back); return { close };
 }
 
 /** compact "is everything ready" strip shown on every party setup screen */
 export function readyStrip() {
   const meter = h('div.meter', { style: { width: '160px', height: '16px' } }, h('i'), h('b'));
-  const chip = h('span.chip#party-mic-chip', app.mic.isOpen ? '🎙 ' + t('mic ready') : '🎙 ' + t('mic not open'));
-  const el = h('div.row', { id: 'ready-strip' }, chip, meter, h('button#open-audio-setup', { onclick: audioSetupModal }, '⚙ ' + t('Audio setup')),
-    h('span.small.dim', app.project.settings.output === 'speakers' ? '📺 ' + t('TV speakers: original sound is muted while you perform') : '🎧 ' + t('Headphones')));
-  const off = app.mic.on('level', (l) => { meter.firstChild.style.width = `${clamp((Math.max(-60, l.peakDb) + 60) / 60, 0, 1) * 100}%`; chip.textContent = '🎙 ' + t('mic ready'); chip.className = 'chip ok'; });
+  const chip = h('span.chip#party-mic-chip', app.mic.isOpen ? t('mic ready') : t('mic not open'));
+  const el = h('div.row', { id: 'ready-strip' }, chip, meter, h('button#open-audio-setup', { onclick: audioSetupModal }, icon('sliders'), t('Audio setup')),
+    h('span.small.dim', app.project.settings.output === 'speakers' ? t('TV speakers: original sound is muted while you perform') : t('Headphones')));
+  const off = app.mic.on('level', (l) => { meter.firstChild.style.width = `${clamp((Math.max(-60, l.peakDb) + 60) / 60, 0, 1) * 100}%`; chip.textContent = t('mic ready'); chip.className = 'chip ok'; });
   el.destroy = off; return el;
 }
 export async function ensureMic() {
@@ -32,8 +33,8 @@ export async function ensureMic() {
 }
 
 export function busyOverlay(text) {
-  const label = h('div', { style: { fontSize: '1.4rem', fontWeight: 700 } }, text); const sub = h('div.dim', ''); const bar = h('i'); const prog = h('div.progress', { style: { width: '320px' } }, bar);
-  const el = h('div.modal-back', { id: 'busy' }, h('div.modal', { style: { textAlign: 'center', width: 'min(520px,92vw)' } }, h('div', { style: { fontSize: '3rem' } }, '🎬'), label, prog, sub));
+  const label = h('div', { style: { fontSize: '1.25rem', fontWeight: 650 } }, text); const sub = h('div.dim', ''); const bar = h('i'); const prog = h('div.progress', { style: { width: '320px' } }, bar);
+  const el = h('div.modal-back', { id: 'busy' }, h('div.modal', { style: { textAlign: 'center', width: 'min(520px,92vw)' } }, label, prog, sub));
   document.body.append(el);
   return { set(t_, s, f) { if (t_) label.textContent = t_; if (s != null) sub.textContent = s; if (f != null) bar.style.width = `${f * 100}%`; }, close: () => el.remove() };
 }
@@ -86,6 +87,6 @@ export class DramaMeter {
 }
 
 export function trackFxPicker(onChange, current = 'none') {
-  return h('div.fxgrid', ...Object.entries(FX_INFO).map(([k, v]) => h('button.fxbtn' + (k === current ? '.sel' : ''), { dataset: { fx: k }, onclick: (e) => { e.currentTarget.parentNode.querySelectorAll('.fxbtn').forEach((b) => b.classList.toggle('sel', b === e.currentTarget)); onChange(k); } }, h('span.e', v.emoji), t(v.label))));
+  return h('div.fxgrid', ...Object.entries(FX_INFO).map(([k, v]) => h('button.fxbtn' + (k === current ? '.sel' : ''), { dataset: { fx: k }, onclick: (e) => { e.currentTarget.parentNode.querySelectorAll('.fxbtn').forEach((b) => b.classList.toggle('sel', b === e.currentTarget)); onChange(k); } }, t(v.label))));
 }
 export { newId, pickColor };

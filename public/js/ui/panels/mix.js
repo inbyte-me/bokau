@@ -1,5 +1,6 @@
 import { h, clear, toast } from '../../util.js';
 import { t } from '../../i18n.js';
+import { icon } from '../../icons.js';
 import { app } from '../../app.js';
 import { api } from '../../api.js';
 import { rmsEnvelope } from '../../audio/peaks.js';
@@ -23,13 +24,13 @@ export function mountMix(root, { band, stage }) {
         if (fresh.stems.status === 'ready') { await app.engine.assets.loadStems(); app.store.commit('Stems', (pr) => { pr.original.source = 'bg'; }, ['levels']); toast(t('Stems ready: dialogue muted, music + SFX kept'), 'ok'); app.engine.refresh(); }
         else toast(t('This clip is mono — voice and music cannot be separated by phase. Use ducking instead.'), 'error', 6000);
       } catch (e) { toast(e.message, 'error'); } finally { render(); }
-    } }, '✂ ' + (ready ? t('Re-separate') : t('Separate dialogue / music')));
+    } }, icon('wave'), ready ? t('Re-separate') : t('Separate dialogue / music'));
     body.append(
       h('div.box', h('h4', t('Original audio')), slider(t('Volume'), 'orig-vol', { min: 0, max: 1.5, step: 0.01, value: p.original.volume, fmt: (v) => `${Math.round(v * 100)}%`, onInput: (v) => { p.original.volume = v; app.engine.applyLevels(); }, onChange: () => app.store.commit('Original volume', () => {}, ['levels']) }),
         h('div.field', h('label', t('Play')), h('select#orig-source', { disabled: !ready, onchange: (e) => { app.store.commit('Original source', (pr) => { pr.original.source = e.target.value; }, ['levels']); app.engine.refresh(); } },
           ...[['full', t('Full mix')], ['bg', t('Music + SFX only (actors silenced)')], ['dialogue', t('Dialogue only')]].map(([v, l]) => h('option', { value: v, selected: p.original.source === v }, l)))),
         sepBtn, stemStatus,
-        ready ? h('div.hint', `✅ ${t('Stems ready')} (${stems.method === 'surround-center' ? t('from the 5.1 centre channel — clean') : t('centre-channel extraction — good for dialogue panned to the middle, imperfect on busy mixes')})`)
+        ready ? h('div.hint', `${t('Stems ready')} (${stems.method === 'surround-center' ? t('from the 5.1 centre channel — clean') : t('centre-channel extraction — good for dialogue panned to the middle, imperfect on busy mixes')})`)
           : stems?.status === 'unsupported' ? h('div.hint.warn', t('Mono audio can\'t be separated this way. Use the volume and ducking controls instead.')) : h('div.hint', t('Splits the clip audio into Original Dialogue and Background (music + sound effects) so you can silence the actors but keep the score, gunshots and ambience.'))),
       h('div.box', h('h4', t('Auto-ducking')), h('label.row', h('input#duck-on', { type: 'checkbox', checked: p.ducking.enabled, onchange: (e) => { app.store.commit('Ducking', (pr) => { pr.ducking.enabled = e.target.checked; }, ['levels']); app.engine.refresh(); } }), t('Lower the background when I speak')),
         slider(t('Reduction'), 'duck-db', { min: -30, max: -3, step: 1, value: p.ducking.db, fmt: (v) => `${v} dB`, onChange: (v) => { app.store.commit('Ducking depth', (pr) => { pr.ducking.db = v; }, ['levels']); app.engine.refresh(); } }),
@@ -40,7 +41,7 @@ export function mountMix(root, { band, stage }) {
         slider(t('Level'), 'ghost-level', { min: 0, max: 1, step: 0.01, value: p.original.ghost.level, fmt: (v) => `${Math.round(v * 100)}%`, onInput: (v) => { p.original.ghost.level = v; app.engine.applyLevels(); }, onChange: () => app.store.commit('Ghost level', () => {}, ['levels']) }),
         h('div.field', h('label', t('Ear')), h('select#ghost-pan', { onchange: (e) => { app.store.commit('Ghost pan', (pr) => { pr.original.ghost.pan = +e.target.value; }, ['levels']); app.engine.applyLevels(); } }, ...[[-1, t('Left ear only')], [1, t('Right ear only')], [0, t('Both ears')]].map(([v, l]) => h('option', { value: v, selected: p.original.ghost.pan === v }, l)))),
         h('div.hint', t('Headphones only. The guide is never part of the export. With separated stems the music bed plays normally and the dialogue is the ghost.'))),
-      h('div.box', h('h4', t('Lip-flap markers')), h('div.row', h('button#flaps-auto', { onclick: autoFlaps }, '🤖 ' + t('Auto-detect from dialogue')), h('button#flaps-clear', { onclick: () => app.store.commit('Clear flaps', (pr) => { pr.lipFlaps = []; }, ['flaps']) }, t('Clear'))),
+      h('div.box', h('h4', t('Lip-flap markers')), h('div.row', h('button#flaps-auto', { onclick: autoFlaps }, icon('wave'), t('Auto-detect from dialogue')), h('button#flaps-clear', { onclick: () => app.store.commit('Clear flaps', (pr) => { pr.lipFlaps = []; }, ['flaps']) }, t('Clear'))),
         h('div.hint', t('Manual: hold the M key while the character\'s mouth is open (while playing). Or drag in the Lip flaps lane. Pink bars show when to speak; red line = now.'))),
       h('div.box', h('h4', t('Display')), slider(t('Band speed'), 'band-speed', { min: 80, max: 420, step: 10, value: band.pps, fmt: (v) => `${v} px/s`, onInput: (v) => band.setSpeed(v) }),
         h('label.row', h('input#banner-on', { type: 'checkbox', checked: localStorage.getItem('banner') !== '0', onchange: (e) => { localStorage.setItem('banner', e.target.checked ? '1' : '0'); stage.showBanner(e.target.checked); } }), t('Show karaoke subtitles on the video')),

@@ -38,7 +38,7 @@ export function newCue(o = {}) {
   return { id: newId('c'), start: 0, end: 1, text: '', character: '', note: '', ...o };
 }
 
-const COLORS = ['#ff6b6b', '#4dd4ac', '#ffd166', '#6aa6ff', '#c792ea', '#ff9f68', '#7bdff2', '#f78fb3'];
+const COLORS = ['#d97b66', '#6fb3a6', '#7a9cc9', '#a98bc4', '#c9946a', '#9bb86f', '#c78fa5', '#8aa0a8'];
 export function pickColor(i) { return COLORS[i % COLORS.length]; }
 
 /**

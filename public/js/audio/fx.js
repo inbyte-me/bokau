@@ -2,11 +2,11 @@
 // live (preview) and in OfflineAudioContext (export) -> what you hear is what you export.
 
 export const FX_INFO = {
-  none: { label: 'Clean', emoji: '🎙️' },
-  walkie: { label: 'Walkie-Talkie', emoji: '📻' },
-  monster: { label: 'Monster', emoji: '👹' },
-  helium: { label: 'Helium', emoji: '🐿️' },
-  ghost: { label: 'Ghost', emoji: '👻' },
+  none: { label: 'Clean' },
+  walkie: { label: 'Walkie-Talkie' },
+  monster: { label: 'Monster' },
+  helium: { label: 'Helium' },
+  ghost: { label: 'Ghost' },
 };
 
 const loaded = new WeakSet();

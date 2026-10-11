@@ -1,5 +1,6 @@
 import { h, clear, toast, download } from '../../util.js';
 import { t } from '../../i18n.js';
+import { icon } from '../../icons.js';
 import { app } from '../../app.js';
 import { api } from '../../api.js';
 import { countText, detectLang, speechRate } from '/shared/syllables.js';
@@ -44,11 +45,11 @@ export function mountCues(root) {
 
   root.append(
     h('div.box', h('h4', t('Get dialogue text')),
-      h('div.row', h('button#sub-import', { onclick: () => file.click() }, '📄 ' + t('Import .srt / .vtt')), h('button#cue-add', { onclick: () => { const s = app.engine.time; const c = newCue({ start: s, end: Math.min(app.engine.duration, s + 2), text: t('New line') }); app.store.commit('Add cue', (p) => { p.cues.push(c); p.cues.sort((a, b) => a.start - b.start); }, ['cues']); app.select({ cueId: c.id }); } }, '＋ ' + t('Cue at playhead'))),
+      h('div.row', h('button#sub-import', { onclick: () => file.click() }, icon('file'), t('Import .srt / .vtt')), h('button#cue-add', { onclick: () => { const s = app.engine.time; const c = newCue({ start: s, end: Math.min(app.engine.duration, s + 2), text: t('New line') }); app.store.commit('Add cue', (p) => { p.cues.push(c); p.cues.sort((a, b) => a.start - b.start); }, ['cues']); app.select({ cueId: c.id }); } }, t('Cue at playhead'))),
       file,
-      h('div.row', model, lang), h('div.row', h('button.primary#stt-go', { onclick: stt }, '🎧 ' + t('Auto-transcribe')), h('button#vad-go', { onclick: detect, title: t('Create empty cue slots where someone is talking') }, '✂ ' + t('Speech slots'))), status),
-    h('div.row', h('button#srt-export', { onclick: () => download(`${app.project.name}.srt`, toSrt(app.project.cues)) }, '⬇ .srt'), h('button#json-export', { onclick: () => download(`${app.project.name}.json`, toJson(app.project.cues, { project: app.project.name, duration: app.project.media.duration }), 'application/json') }, '⬇ .json'),
-      h('div.spacer'), h('button.ghost', { onclick: () => app.project.cues.length && confirm(t('Delete all cues?')) && app.store.commit('Clear cues', (p) => { p.cues = []; }, ['cues']) }, '🗑 ' + t('Clear'))),
+      h('div.row', model, lang), h('div.row', h('button.primary#stt-go', { onclick: stt }, t('Auto-transcribe')), h('button#vad-go', { onclick: detect, title: t('Create empty cue slots where someone is talking') }, t('Speech slots'))), status),
+    h('div.row', h('button#srt-export', { onclick: () => download(`${app.project.name}.srt`, toSrt(app.project.cues)) }, icon('download'), '.srt'), h('button#json-export', { onclick: () => download(`${app.project.name}.json`, toJson(app.project.cues, { project: app.project.name, duration: app.project.media.duration }), 'application/json') }, icon('download'), '.json'),
+      h('div.spacer'), h('button.ghost', { onclick: () => app.project.cues.length && confirm(t('Delete all cues?')) && app.store.commit('Clear cues', (p) => { p.cues = []; }, ['cues']) }, icon('trash'), t('Clear'))),
     list);
 
   let activeId = null;
@@ -65,11 +66,11 @@ export function mountCues(root) {
       const el = h('div.cue' + (app.sel.cueId === c.id ? '.sel' : ''), { dataset: { id: c.id }, onclick: () => app.select({ cueId: c.id }) },
         h('div.meta', time('start'), '→', time('end'), h('input.who', { value: c.character || '', placeholder: t('Character'), onchange: (e) => app.store.commit('Edit cue character', () => { c.character = e.target.value; }, ['cues']) }), sylEl),
         ta,
-        h('div.row', h('button.icon', { title: t('Go to cue'), onclick: (e) => { e.stopPropagation(); app.engine.seek(c.start); } }, '⏮'),
-          h('button.icon', { title: t('Play this cue'), onclick: (e) => { e.stopPropagation(); app.engine.playRange(Math.max(0, c.start - 0.5), c.end + 0.3); } }, '▶'),
-          h('button.icon.rec-cue', { title: t('Record this cue (punch)'), onclick: (e) => { e.stopPropagation(); app.select({ cueId: c.id }); app.emit('record-cue', c); } }, '🎙'),
-          h('button.icon', { title: t('Loop-record this cue until you nail it'), onclick: (e) => { e.stopPropagation(); app.select({ cueId: c.id }); app.emit('record-cue', c, true); } }, '🔁'),
-          h('div.spacer'), h('button.ghost', { title: t('Delete'), onclick: (e) => { e.stopPropagation(); app.store.commit('Delete cue', (p) => { p.cues = p.cues.filter((x) => x.id !== c.id); }, ['cues']); } }, '✕')));
+        h('div.row', h('button.icon', { title: t('Go to cue'), onclick: (e) => { e.stopPropagation(); app.engine.seek(c.start); } }, icon('start', 13)),
+          h('button.icon', { title: t('Play this cue'), onclick: (e) => { e.stopPropagation(); app.engine.playRange(Math.max(0, c.start - 0.5), c.end + 0.3); } }, icon('play', 13)),
+          h('button.icon.rec-cue', { title: t('Record this cue (punch)'), onclick: (e) => { e.stopPropagation(); app.select({ cueId: c.id }); app.emit('record-cue', c); } }, icon('mic', 13)),
+          h('button.icon', { title: t('Loop-record this cue until you nail it'), onclick: (e) => { e.stopPropagation(); app.select({ cueId: c.id }); app.emit('record-cue', c, true); } }, icon('loop', 13)),
+          h('div.spacer'), h('button.ghost', { title: t('Delete'), onclick: (e) => { e.stopPropagation(); app.store.commit('Delete cue', (p) => { p.cues = p.cues.filter((x) => x.id !== c.id); }, ['cues']); } }, icon('close', 12))));
       list.append(el);
     }
     if (keep) list.querySelector(`.cue[data-id="${keep}"] textarea`)?.focus();

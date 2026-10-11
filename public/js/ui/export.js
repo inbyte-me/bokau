@@ -1,5 +1,6 @@
 import { h, clear, toast, fmtBytes } from '../util.js';
 import { t } from '../i18n.js';
+import { icon } from '../icons.js';
 import { app } from '../app.js';
 import { api } from '../api.js';
 import { renderAndUpload } from '../audio/render.js';
@@ -17,11 +18,11 @@ export function exportDialog() {
   opt.focus = h('input#ex-focus', { type: 'range', min: 0, max: 1, step: 0.01, value: 0.5 });
   const chkSubs = chk('ex-subs', t('Burn subtitles into the picture'), false), chkVert = chk('ex-vert', t('Vertical 9:16 (Reels / TikTok / Shorts)'), false), chkLoud = chk('ex-loud', t('Normalize loudness (−16 LUFS)'), false);
   const profBtn = (id, em, title, desc) => h('button.mode' + (id === profile ? '.sel' : ''), { dataset: { profile: id }, type: 'button', onclick: () => { profile = id; [...profiles.children].forEach((c) => c.classList.toggle('sel', c.dataset.profile === id)); sync(); } }, h('div.big', em), h('h3', title), h('p', desc));
-  const profiles = h('div.modes', profBtn('quick', '📱', t('Quick share'), t('Small H.264/AAC (or WebM) for Discord, WhatsApp, chat.')), profBtn('archive', '🗄', t('Studio archive'), t('Mixed video + separate WAV stems: music/SFX, voice dry, voice wet. Plus .srt and .json.')));
+  const profiles = h('div.modes', profBtn('quick', '', t('Quick share'), t('Small H.264/AAC (or WebM) for Discord, WhatsApp, chat.')), profBtn('archive', '', t('Studio archive'), t('Mixed video + separate WAV stems: music/SFX, voice dry, voice wet. Plus .srt and .json.')));
   const plan = h('div.hint#ex-plan'); const progress = h('div.progress.hidden', h('i')); const msg = h('div.small.dim#ex-msg'); const results = h('div.col#ex-results');
   const sync = async () => {
     const o = options(); const needsRender = o.burnSubs || o.watermark || o.vertical;
-    plan.textContent = !m.hasVideo ? '' : needsRender ? t('Full render: video is re-encoded (slower).') : `⚡ ${t('Fast export: the original video stream is copied untouched, only the new audio is added — near instant.')}`;
+    plan.textContent = !m.hasVideo ? '' : needsRender ? t('Full render: video is re-encoded (slower).') : t('Fast export: the original video stream is copied untouched, only the new audio is added — near instant.');
     opt.format.disabled = !needsRender && m.hasVideo; opt.target.disabled = !needsRender && m.hasVideo; if (!needsRender && m.hasVideo) opt.target.value = 0;
   };
   const options = () => ({ profile, format: opt.format.value, burnSubs: opt['ex-subs'].checked && p.cues.length > 0, watermark: opt.wm.value.trim() ? { text: opt.wm.value.trim(), pos: opt.wmPos.value } : null, vertical: opt['ex-vert'].checked ? { enabled: true, focusX: +opt.focus.value } : null, targetMb: +opt.target.value || 0, loudnorm: opt['ex-loud'].checked, maxHeight: opt['ex-vert'].checked ? 1920 : 1080 });
@@ -37,9 +38,9 @@ export function exportDialog() {
       setP(0.55, t('Muxing video…'));
       const { job } = await api.post(`/api/projects/${p.id}/export`, options());
       const res = await api.waitJob(job, (j) => setP(0.55 + j.progress * 0.45, `${t('Encoding')} ${Math.round(j.progress * 100)}%`));
-      setP(1, '✅ ' + t('Done'));
-      for (const f of res.files) results.append(h('a.take', { href: `/media/${p.id}/exports/${res.dir}/${f}`, download: f, dataset: { file: f } }, h('div.grow', f), h('span.small.dim', fmtBytes(res.sizes[f])), h('span', '⬇')));
-      results.append(h('div.hint', `${res.plan.fast ? '⚡ ' + t('stream copy') : t('re-encoded')} · ${t('saved in')} data/projects/${p.id}/exports/${res.dir}`));
+      setP(1, t('Done'));
+      for (const f of res.files) results.append(h('a.take', { href: `/media/${p.id}/exports/${res.dir}/${f}`, download: f, dataset: { file: f } }, h('div.grow', f), h('span.small.dim', fmtBytes(res.sizes[f])), h('span', icon('download'))));
+      results.append(h('div.hint', `${res.plan.fast ? t('stream copy') : t('re-encoded')} · ${t('saved in')} data/projects/${p.id}/exports/${res.dir}`));
     } catch (e) { setP(0, ''); toast(e.message, 'error'); msg.textContent = e.message; } finally { busy = false; go.disabled = false; }
   } }, t('Export'));
   back.append(h('div.modal', h('h2', t('Export')), profiles, plan,

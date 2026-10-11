@@ -1,5 +1,6 @@
 import { h, clear, toast, fmtClock, clamp } from '../util.js';
 import { t } from '../i18n.js';
+import { icon } from '../icons.js';
 import { app } from '../app.js';
 import { api } from '../api.js';
 import { Timeline } from './timeline.js';
@@ -20,7 +21,7 @@ const SHORTCUTS = [
 ];
 export function shortcutsModal() {
   const back = h('div.modal-back', { onclick: (e) => e.target === back && back.remove() });
-  back.append(h('div.modal', { id: 'shortcuts' }, h('h2', '⌨ ' + t('Keyboard shortcuts')), h('div.col', ...SHORTCUTS.map(([k, d]) => h('div.row', h('div', { style: { minWidth: '11em' } }, ...k.split(' ').map((x) => (/^[+/…−]$|^or$/.test(x) ? ` ${x} ` : h('kbd', x)))), h('div.dim', t(d))))), h('div.actions', h('button.primary', { onclick: () => back.remove() }, t('Close')))));
+  back.append(h('div.modal', { id: 'shortcuts' }, h('h2', t('Keyboard shortcuts')), h('div.col', ...SHORTCUTS.map(([k, d]) => h('div.row', h('div', { style: { minWidth: '11em' } }, ...k.split(' ').map((x) => (/^[+/…−]$|^or$/.test(x) ? ` ${x} ` : h('kbd', x)))), h('div.dim', t(d))))), h('div.actions', h('button.primary', { onclick: () => back.remove() }, t('Close')))));
   document.body.append(back);
 }
 
@@ -37,30 +38,30 @@ export async function mount(root, { go, topbar }) {
   // ---- top bar extras ----
   const title = h('input.title#proj-title', { type: 'text', value: p.name, onchange: (e) => store.commit('Rename project', (pr) => { pr.name = e.target.value || pr.name; }, ['meta']) });
   const saveEl = h('div.savestate', '');
-  const undoBtn = h('button.icon#undo', { title: t('Undo (Ctrl/⌘+Z)'), onclick: () => { const l = store.undo(); if (l) { engine.refresh(); toast(`↶ ${l}`); } } }, '↶');
-  const redoBtn = h('button.icon#redo', { title: t('Redo'), onclick: () => { const l = store.redo(); if (l) { engine.refresh(); toast(`↷ ${l}`); } } }, '↷');
-  topbar.querySelector('.spacer').before(title, undoBtn, redoBtn, saveEl, h('button.primary#export-btn', { onclick: () => exportDialog() }, '⬆ ' + t('Export')), h('button.icon#help-btn', { title: t('Keyboard shortcuts (?)'), onclick: shortcutsModal }, '⌨'));
-  const offSave = store.on('save-state', (s) => { saveEl.textContent = { saved: '✓ ' + t('saved'), dirty: '…', saving: t('saving…'), error: t('save failed') }[s] || ''; saveEl.className = 'savestate ' + (s === 'error' ? 'error' : ''); });
-  saveEl.textContent = '✓ ' + t('saved');
+  const undoBtn = h('button.icon#undo', { title: t('Undo (Ctrl/⌘+Z)'), onclick: () => { const l = store.undo(); if (l) { engine.refresh(); toast(`${t('Undo')}: ${l}`); } } }, icon('undo'));
+  const redoBtn = h('button.icon#redo', { title: t('Redo'), onclick: () => { const l = store.redo(); if (l) { engine.refresh(); toast(`${t('Redo')}: ${l}`); } } }, icon('redo'));
+  topbar.querySelector('.spacer').before(title, undoBtn, redoBtn, saveEl, h('button.primary#export-btn', { onclick: () => exportDialog() }, icon('export'), t('Export')), h('button.icon#help-btn', { title: t('Keyboard shortcuts (?)'), onclick: shortcutsModal }, icon('keys')));
+  const offSave = store.on('save-state', (s) => { saveEl.textContent = { saved: t('saved'), dirty: '…', saving: t('saving…'), error: t('save failed') }[s] || ''; saveEl.className = 'savestate ' + (s === 'error' ? 'error' : ''); });
+  saveEl.textContent = t('saved');
 
   // ---- transport ----
-  const clock = h('div.clock#clock', '00:00'); const lenEl = h('span.dim.mono', ` / ${fmtClock(p.media.duration)}`);
-  const playBtn = h('button.icon#play', { title: t('Play / pause (Space)'), onclick: () => togglePlay() }, '▶');
-  const recBtn = h('button.icon.rec#rec', { title: t('Record (R)'), onclick: () => toggleRecord() }, '⏺');
+  const clock = h('div.clock#clock', '00:00.000'); const lenEl = h('span.dim.mono', ` / ${fmtClock(p.media.duration)}`);
+  const playBtn = h('button.icon#play', { title: t('Play / pause (Space)'), onclick: () => togglePlay() }, icon('play'));
+  const recBtn = h('button.icon.rec#rec', { title: t('Record (R)'), onclick: () => toggleRecord() }, icon('rec'));
   const recMode = h('select#rec-mode', { title: t('What to record') }, ...[['playhead', t('From playhead')], ['cue', t('Selected cue')], ['region', t('Punch range')], ['loop', t('Loop takes (cue/range)')]].map(([v, l]) => h('option', { value: v }, l)));
-  const loopBtn = h('button.icon#loop-play', { title: t('Loop playback of the selected range (L)'), onclick: () => tl.loopFromSelection() }, '🔁');
+  const loopBtn = h('button.icon#loop-play', { title: t('Loop playback of the selected range (L)'), onclick: () => tl.loopFromSelection() }, icon('loop'));
   const miniMeter = h('div.meter', h('i'), h('b'));
   const micBtn = h('span.chip#mic-chip', t('mic closed'));
-  const transport = h('div.transport', h('button.icon#to-start', { title: 'Home', onclick: () => engine.seek(0) }, '⏮'), h('button.icon', { title: t('Back one frame (←)'), onclick: () => engine.stepFrame(-1) }, '◂'), playBtn, h('button.icon', { title: t('Forward one frame (→)'), onclick: () => engine.stepFrame(1) }, '▸'),
-    h('button.icon#stop', { title: t('Stop'), onclick: () => { stopAll(); engine.seek(p.loop?.start ?? 0); } }, '⏹'), h('div.sep'), recBtn, recMode, loopBtn, h('div.sep'), clock, lenEl, h('div.spacer'), micBtn, miniMeter,
+  const transport = h('div.transport', h('div.grp', h('button.icon#to-start', { title: t('Go to start (Home)'), onclick: () => engine.seek(0) }, icon('start')), h('button.icon', { title: t('Back one frame (←)'), onclick: () => engine.stepFrame(-1) }, icon('stepBack')), playBtn, h('button.icon', { title: t('Forward one frame (→)'), onclick: () => engine.stepFrame(1) }, icon('stepFwd')),
+    h('button.icon#stop', { title: t('Stop'), onclick: () => { stopAll(); engine.seek(p.loop?.start ?? 0); } }, icon('stop'))), h('div.sep'), recBtn, recMode, loopBtn, h('div.sep'), clock, lenEl, h('div.spacer'), micBtn, miniMeter,
     h('div.sep'), h('span.dim.small', t('Take:')), h('span.chip#track-chip', ''));
   const timeline = h('div.timeline'); const tl = new Timeline(timeline);
 
   // ---- side panels ----
-  const tabsDef = [['cues', '💬', t('Cues'), mountCues], ['voice', '🎙', t('Voice'), mountVoice], ['mix', '🎚', t('Mix'), (r) => mountMix(r, { band, stage })], ['takes', '🎞', t('Takes'), mountTakes], ['ai', '✨', t('AI'), mountAi]];
+  const tabsDef = [['cues', '', t('Cues'), mountCues], ['voice', '', t('Voice'), mountVoice], ['mix', '', t('Mix'), (r) => mountMix(r, { band, stage })], ['takes', '', t('Takes'), mountTakes], ['ai', '', t('AI'), mountAi]];
   const panel = h('div.panel#panel'); const tabs = h('div.tabs'); let curTab = null, curPanel = null;
   const showTab = (id) => { curPanel?.destroy?.(); clear(panel); curTab = id; const d = tabsDef.find((x) => x[0] === id); curPanel = d[3](panel); [...tabs.children].forEach((b) => b.classList.toggle('sel', b.dataset.tab === id)); try { sessionStorage.setItem('tab', id); } catch {} };
-  tabsDef.forEach(([id, em, label]) => tabs.append(h('button.tab', { dataset: { tab: id }, id: 'tab-' + id, onclick: () => showTab(id) }, `${em} ${label}`)));
+  tabsDef.forEach(([id, em, label]) => tabs.append(h('button.tab', { dataset: { tab: id }, id: 'tab-' + id, onclick: () => showTab(id) }, label)));
   const side = h('div.side', tabs, panel);
   const studioEl = h('div.studio', h('div.stage-wrap', stage.el, bandCv), side, transport, timeline);
   root.append(studioEl);
@@ -99,7 +100,7 @@ export async function mount(root, { go, topbar }) {
 
   const offs = [
     engine.on('time', (tm) => { clock.textContent = fmtClock(tm, { ms: true }); }),
-    engine.on('play', () => { playBtn.textContent = '⏸'; }), engine.on('pause', () => { playBtn.textContent = '▶'; }),
+    engine.on('play', () => playBtn.replaceChildren(icon('pause'))), engine.on('pause', () => playBtn.replaceChildren(icon('play'))),
     session.on('state', (s) => { recBtn.classList.toggle('on', s === 'recording' || s === 'countdown'); studioEl.classList.toggle('recording', s === 'recording'); playBtn.disabled = false; tl.invalidate(); }),
     mic.on('level', (l) => { const f = clamp((Math.max(-60, l.peakDb) + 60) / 60, 0, 1); miniMeter.firstChild.style.width = `${f * 100}%`; micBtn.textContent = t('mic on'); micBtn.className = 'chip ok'; }),
     app.on('selection', () => { trackChip(); }), store.on('change', () => { undoBtn.disabled = !store.undoStack.length; redoBtn.disabled = !store.redoStack.length; trackChip(); }),
@@ -111,7 +112,7 @@ export async function mount(root, { go, topbar }) {
   const fmtMark = (tm) => fmtClock(tm, { ms: true });
   function setMark(n) {
     const tm = engine.time; store.commit('Set mark', (pr) => { pr.markers = (pr.markers || []).filter((m) => m.n !== n); pr.markers.push({ id: 'm' + n, n, t: tm }); pr.markers.sort((a, b) => a.n - b.n); }, ['markers']);
-    toast(`🚩 ${t('Mark')} ${n} · ${fmtMark(tm)}`, 'ok', 1500);
+    toast(`${t('Mark')} ${n} · ${fmtMark(tm)}`, 'ok', 1500);
   }
   async function jumpMark(n) {
     const m = (store.project.markers || []).find((x) => x.n === n); if (!m) return toast(`${t('No mark')} ${n} — ${t('set one with ⌘/Ctrl+number')}`, 'error', 2200);

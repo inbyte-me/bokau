@@ -3,6 +3,7 @@ import { t, getLang, setLang, onLang } from './i18n.js';
 import { api } from './api.js';
 import { app } from './app.js';
 import { mountLibrary } from './ui/library.js';
+import { icon } from './icons.js';
 
 const root = document.getElementById('app');
 let current = null;
@@ -13,7 +14,7 @@ function topbar(extra) {
   const lang = h('select', { id: 'lang', title: 'Language', onchange: (e) => { setLang(e.target.value); route(); } }, h('option', { value: 'en', selected: getLang() === 'en' }, 'English'), h('option', { value: 'es', selected: getLang() === 'es' }, 'Español'));
   const ai = h('span.chip', { id: 'ai-chip', title: t('OpenRouter usage (hard-capped locally)') }, '…');
   api.system().then((s) => { app.system = s; ai.textContent = s.ai.configured ? `AI $${s.ai.spentUsd.toFixed(3)} / $${s.ai.capUsd}` : t('AI offline'); ai.classList.add(s.ai.configured ? 'ok' : 'warn'); }).catch(() => { ai.textContent = t('server?'); });
-  const tv = h('button.icon', { id: 'tv-btn', title: t('TV mode (big UI, fullscreen)'), onclick: toggleTv }, '📺');
+  const tv = h('button.icon', { id: 'tv-btn', title: t('TV mode (big UI, fullscreen)'), onclick: toggleTv }, icon('tv'));
   return h('div.topbar', h('div.brand', { onclick: () => go('/') }, h('span.dot'), 'Doblaje Studio'), ...(extra || []), h('div.spacer'), ai, lang, tv);
 }
 export function toggleTv(force) {

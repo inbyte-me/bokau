@@ -1,5 +1,6 @@
 import { h, clear, fmtClock } from '../../util.js';
 import { t } from '../../i18n.js';
+import { icon } from '../../icons.js';
 import { app } from '../../app.js';
 import { applyTake } from '../../audio/session.js';
 
@@ -8,14 +9,14 @@ export function mountTakes(root) {
   function render() {
     clear(body); const tr = app.track; if (!tr) return;
     body.append(h('div.hint', `${t('Takes on')} “${tr.name}” — ${t('click “Use” to put a take on the timeline (it replaces what is there). Nothing is ever deleted from disk.')}`));
-    if (!tr.takes.length) body.append(h('div.empty', { style: { padding: '1rem' } }, t('No takes yet. Press ⏺ to record.')));
+    if (!tr.takes.length) body.append(h('div.empty', { style: { padding: '1rem' } }, t('No takes yet. Press R to record.')));
     for (const k of [...tr.takes].reverse()) {
       const active = tr.clips.some((c) => c.takeId === k.id || c.file === k.file);
       body.append(h('div.take' + (active ? '.active' : ''), { dataset: { take: k.id } },
         h('div.grow', h('div', k.label || t('Take')), h('div.small.dim.mono', `${fmtClock(k.start, { ms: true })} · ${k.duration.toFixed(1)}s${k.latencyMs ? ` · −${k.latencyMs}ms` : ''}`)),
-        h('button.icon', { title: t('Audition'), onclick: () => { app.engine.playRange(Math.max(0, k.start - 0.3), k.start + k.duration + 0.2, { include: { original: true, voices: false, ghost: false } }); auditionTake(k); } }, '▶'),
-        h('button.use', { onclick: () => { applyTake(app.store, tr.id, k.id); app.engine.refresh(); } }, active ? '✓ ' + t('Active') : t('Use')),
-        h('button.ghost', { title: t('Remove from list'), onclick: () => { app.store.commit('Remove take', () => { tr.takes = tr.takes.filter((x) => x.id !== k.id); }, ['tracks']); } }, '✕')));
+        h('button.icon', { title: t('Audition'), onclick: () => { app.engine.playRange(Math.max(0, k.start - 0.3), k.start + k.duration + 0.2, { include: { original: true, voices: false, ghost: false } }); auditionTake(k); } }, icon('play', 13)),
+        h('button.use', { onclick: () => { applyTake(app.store, tr.id, k.id); app.engine.refresh(); } }, active ? t('Active') : t('Use')),
+        h('button.ghost', { title: t('Remove from list'), onclick: () => { app.store.commit('Remove take', () => { tr.takes = tr.takes.filter((x) => x.id !== k.id); }, ['tracks']); } }, icon('close', 12))));
     }
   }
   // audition plays the take alone (without touching the track clips) over the original
