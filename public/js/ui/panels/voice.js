@@ -21,7 +21,7 @@ export function mountVoice(root) {
   const meterFill = h('i'); const peakTick = h('b'); const meter = h('div.meter.big#mic-meter', meterFill, peakTick);
   const meterTxt = h('div.small.mono.dim#mic-db', '— dB');
   const inSel = h('select#mic-device'); const outSel = h('select#out-device'); const chSel = h('select#mic-channel', ...[['auto', t('Auto')], ['left', t('Input 1 / Left')], ['right', t('Input 2 / Right')], ['mix', t('Mix both')]].map(([v, l]) => h('option', { value: v }, l)));
-  const info = h('div.hint#mic-info');
+  const info = h('div.hint#mic-info'); const hint = h('div.hint.warn#no-interface-hint');
   let peakHold = 0;
 
   async function fillDevices() {
@@ -30,6 +30,10 @@ export function mountVoice(root) {
     for (const i of d.inputs) inSel.append(h('option', { value: i.deviceId, selected: i.deviceId === mic.settings.deviceId }, i.label || t('Microphone') + ' ' + i.deviceId.slice(0, 4)));
     for (const o of d.outputs) outSel.append(h('option', { value: o.deviceId }, o.label || t('Output') + ' ' + o.deviceId.slice(0, 4)));
     if (!d.labelled) info.textContent = t('Click "Open mic" to allow microphone access — device names appear after that.');
+    else {
+      const external = d.inputs.filter((i) => !/built-in|integrad|virtual|zoom|predeterminado|default/i.test(i.label));
+      hint.textContent = external.length ? '' : t('Only built-in or virtual inputs are visible. If you expected a USB audio interface, check that its cable carries data (not charge-only), try another port, then press Rescan.');
+    }
   }
   navigator.mediaDevices?.addEventListener?.('devicechange', fillDevices);
 
@@ -123,7 +127,7 @@ export function mountVoice(root) {
   }
 
   root.append(
-    h('div.box', h('h4', t('Microphone / audio interface')), h('div.field', h('label', t('Input device')), inSel), h('div.field', h('label', t('Interface channel')), chSel),
+    h('div.box', h('h4', t('Microphone / audio interface')), h('div.field', h('label', t('Input device')), h('div.row', inSel, h('button.icon#rescan', { title: t('Rescan devices'), onclick: fillDevices }, '🔄'))), hint, h('div.field', h('label', t('Interface channel')), chSel),
       h('div.slider', t('Input trim'), gain, gv), meter, meterTxt, info, h('div.row', openBtn, checkBtn), checkOut,
       h('div.field', h('label', t('Output device (headphones / TV)')), outSel)),
     recBox,
