@@ -1,0 +1,8 @@
+node_modules/
+data/
+models/
+*.log
+.DS_Store
+test/.tmp/
+.env
+.env.*
