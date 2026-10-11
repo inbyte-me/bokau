@@ -13,7 +13,19 @@ export async function ingest(cfg, projects, id, srcFile, job) {
   const set = (progress, message) => { if (job) { job.progress = progress; job.message = message; } };
 
   set(0.02, 'probe');
-  const info = await probe(cfg, srcFile);
+  let info = await probe(cfg, srcFile);
+  if (!info.duration && (info.hasVideo || info.hasAudio)) { // MediaRecorder output has no duration/cues: remux once so the file becomes seekable
+    set(0.03, 'repair');
+    const fixed = srcFile + '.fixed' + path.extname(srcFile);
+    await runFfmpeg(cfg, ['-fflags', '+genpts', '-i', srcFile, '-c', 'copy', fixed]);
+    fs.renameSync(fixed, srcFile);
+    info = await probe(cfg, srcFile);
+    if (!info.duration) { // last resort: decode once and read the clock
+      const { stderr } = await exec(cfg.ffmpeg, ['-hide_banner', '-nostdin', '-i', srcFile, '-f', 'null', '-']);
+      const m = [...stderr.matchAll(/time=(\d+):(\d+):(\d+\.\d+)/g)].pop();
+      if (m) info.duration = Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3]);
+    }
+  }
   if (!info.duration || (!info.hasVideo && !info.hasAudio)) throw new Error('No playable audio/video found in this file');
   const duration = info.duration;
 

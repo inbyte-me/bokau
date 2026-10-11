@@ -1,5 +1,6 @@
 import { createFx, createMicFix, ensureWorklets } from './fx.js';
 import { computeDuckCurve } from './duck.js';
+import { silencedRanges, maskCurve } from '/shared/diarize.js';
 
 /**
  * Builds the playback graph for any BaseAudioContext (live or offline). Single source of truth for the mix.
@@ -32,18 +33,31 @@ export async function buildMix(ctx, project, assets, opts) {
   handle.audibleTrack = audibleTrack;
 
   // ---------- original (music/sfx/dialogue) ----------
+  // With separated stems, "full" plays music + dialogue as two layers so individual voices can be silenced.
   if (include.original && assets.orig) {
-    const wantBg = project.original.source === 'bg' || (include.ghost && project.original.ghost.enabled);
-    const wantDlg = project.original.source === 'dialogue';
-    const buf = wantBg ? (assets.bg || (include.ghost && project.original.ghost.enabled ? null : assets.orig)) : wantDlg ? (assets.dialogue || assets.orig) : assets.orig;
-    if (buf && audibleOrig) {
-      const src = ctx.createBufferSource(); src.buffer = buf;
+    const ghostOn = include.ghost && project.original.ghost.enabled;
+    const src_ = project.original.source; const stemsOk = !!(assets.bg && assets.dialogue);
+    const spk = project.speakers || { list: [], segments: [] }; const silenced = silencedRanges(spk.list, spk.segments);
+    let parts; // [{buf, masked}]
+    if (src_ === 'bg' || ghostOn) parts = assets.bg ? [{ buf: assets.bg }] : ghostOn ? [] : [{ buf: assets.orig }];
+    else if (src_ === 'dialogue') parts = [{ buf: assets.dialogue || assets.orig, masked: !!assets.dialogue }];
+    else if (stemsOk && silenced.length) parts = [{ buf: assets.bg }, { buf: assets.dialogue, masked: true }];
+    else parts = [{ buf: assets.orig }];
+    if (parts.length && audibleOrig) {
       const g = ctx.createGain(); g.gain.value = project.original.volume;
       const duck = ctx.createGain(); duck.gain.value = 1;
       const liveDuck = ctx.createGain(); liveDuck.gain.value = 1; // driven by the live mic while recording
-      src.connect(g); g.connect(duck); duck.connect(liveDuck); liveDuck.connect(master);
-      src.start(when, Math.min(from, buf.duration), Math.max(0, Math.min(duration, buf.duration - from)));
-      sources.push(src); handle.nodes.origGain = g; handle.nodes.duck = duck; handle.nodes.liveDuck = liveDuck;
+      g.connect(duck); duck.connect(liveDuck); liveDuck.connect(master);
+      for (const part of parts) {
+        const src = ctx.createBufferSource(); src.buffer = part.buf;
+        if (part.masked && silenced.length) {
+          const mg = ctx.createGain(); const curve = maskCurve(silenced, from, duration);
+          mg.gain.setValueAtTime(curve[0], when); mg.gain.setValueCurveAtTime(curve, when, Math.max(0.02, (curve.length - 1) / 200));
+          src.connect(mg); mg.connect(g); handle.nodes.voiceMask = mg;
+        } else src.connect(g);
+        src.start(when, Math.min(from, part.buf.duration), Math.max(0, Math.min(duration, part.buf.duration - from))); sources.push(src);
+      }
+      handle.nodes.origGain = g; handle.nodes.duck = duck; handle.nodes.liveDuck = liveDuck;
       if (ducking && project.ducking.enabled && include.voices) {
         const d = computeDuckCurve(project, assets, { duration: assets.totalDuration ?? (from + duration), audibleTrack });
         const i0 = Math.max(0, Math.floor(from * d.rate));

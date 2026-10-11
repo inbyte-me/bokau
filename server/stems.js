@@ -1,5 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
+import { spawn } from 'node:child_process';
 import { exec, runFfmpeg, parseSilence } from './ffmpeg.js';
 
 const SURROUND = {
@@ -27,7 +29,34 @@ export async function stereoSpread(cfg, wav) {
  *  - stereo sources: band-limited centre-channel extraction (150 Hz..7 kHz). dialogue + background == original.
  *  - (near-)mono sources can't be separated this way -> status 'unsupported'.
  */
-export async function separateStems(cfg, projects, id, job) {
+export const neuralPython = (cfg) => path.join(cfg.root, 'tools', 'venv', 'bin', 'python');
+export function neuralAvailable(cfg) {
+  try { return fs.existsSync(neuralPython(cfg)) && fs.readdirSync(path.join(cfg.root, 'tools', 'venv', 'lib')).some((d) => fs.existsSync(path.join(cfg.root, 'tools', 'venv', 'lib', d, 'site-packages', 'demucs'))); } catch { return false; }
+}
+
+/** Neural separation with Demucs (htdemucs, vocals vs everything else). Works on mono mixes, where phase tricks cannot. */
+async function separateNeural(cfg, dir, dur, set) {
+  const work = path.join(dir, '.demucs'); fs.rmSync(work, { recursive: true, force: true }); fs.mkdirSync(work, { recursive: true });
+  const input = path.join(work, 'in.wav');
+  set(0.03, 'preparing');
+  await runFfmpeg(cfg, ['-i', path.join(dir, 'audio_orig.wav'), '-ar', '44100', '-ac', '2', '-c:a', 'pcm_s16le', input]);
+  await new Promise((resolve, reject) => {
+    const env = { ...process.env, TORCH_HOME: path.join(cfg.root, 'tools', 'torch'), PYTHONUNBUFFERED: '1', OMP_NUM_THREADS: String(Math.max(2, (os.cpus().length || 4) - 1)) };
+    const p = spawn(neuralPython(cfg), ['-m', 'demucs', '-n', 'htdemucs', '--two-stems', 'vocals', '-d', 'cpu', '--shifts', '0', '-o', path.join(work, 'out'), input], { env, stdio: ['ignore', 'pipe', 'pipe'] });
+    let tail = '';
+    p.stderr.on('data', (d) => { const t = d.toString(); tail = (tail + t).slice(-2000); const m = [...t.matchAll(/(\d+)%\|/g)].pop(); if (m) set(0.05 + (Number(m[1]) / 100) * 0.85, 'neural separation'); });
+    p.stdout.on('data', () => {});
+    p.on('error', (e) => reject(new Error('could not start demucs: ' + e.message)));
+    p.on('close', (code) => (code === 0 ? resolve() : reject(new Error('demucs failed: ' + tail.split('\n').slice(-4).join(' ')))));
+  });
+  const outDir = path.join(work, 'out', 'htdemucs', 'in');
+  set(0.92, 'writing stems');
+  await runFfmpeg(cfg, ['-i', path.join(outDir, 'vocals.wav'), '-ar', '48000', '-ac', '2', '-c:a', 'pcm_s16le', path.join(dir, 'stem_dialogue.wav')]);
+  await runFfmpeg(cfg, ['-i', path.join(outDir, 'no_vocals.wav'), '-ar', '48000', '-ac', '2', '-c:a', 'pcm_s16le', path.join(dir, 'stem_bg.wav')]);
+  fs.rmSync(work, { recursive: true, force: true });
+}
+
+export async function separateStems(cfg, projects, id, job, { method: requested = 'auto' } = {}) {
   const dir = projects.dir(id);
   const p = projects.get(id);
   if (!p.media?.hasAudio) throw new Error('This clip has no audio to separate');
@@ -40,6 +69,12 @@ export async function separateStems(cfg, projects, id, job) {
   const src = path.join(dir, p.media.sourceFile || 'source');
   let method; let spread = null;
 
+  const wantNeural = requested === 'neural';
+  if (wantNeural) {
+    if (!neuralAvailable(cfg)) { const e = new Error('The neural separator is not installed. Run: npm run setup:separation'); e.code = 'NEURAL_MISSING'; throw e; }
+    await separateNeural(cfg, dir, dur, set);
+    const upd = projects.get(id); upd.stems = { status: 'ready', method: 'neural-demucs', spread: null, createdAt: new Date().toISOString() }; projects.save(upd); return upd.stems;
+  }
   if (SURROUND[layout] && fs.existsSync(src)) {
     method = 'surround-center';
     const ch = SURROUND[layout];
@@ -54,7 +89,7 @@ export async function separateStems(cfg, projects, id, job) {
     spread = await stereoSpread(cfg, orig);
     if (p.media.channels < 2 || spread.relDb < -35) {
       const upd = projects.get(id);
-      upd.stems = { status: 'unsupported', method: null, reason: 'mono', spread };
+      upd.stems = { status: 'unsupported', method: null, reason: 'mono', spread, neuralAvailable: neuralAvailable(cfg) };
       projects.save(upd);
       return upd.stems;
     }

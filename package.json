@@ -12,7 +12,8 @@
     "test:e2e": "node --test --test-concurrency=1 \"test/e2e/*.test.js\"",
     "doctor": "node scripts/doctor.mjs",
     "test:live": "LIVE_MIC=1 node --test test/e2e/live-mic.test.js",
-    "watch:interface": "node scripts/watch-interface.mjs"
+    "watch:interface": "node scripts/watch-interface.mjs",
+    "setup:separation": "bash scripts/setup-separation.sh"
   },
   "engines": {
     "node": ">=22"

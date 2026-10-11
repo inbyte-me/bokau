@@ -7,8 +7,9 @@ import { HttpError, json, readJson, readBody, streamToFile, serveFile, isId, uid
 import { Jobs } from './jobs.js';
 import { Projects } from './projects.js';
 import { ingest } from './ingest.js';
-import { separateStems, detectSpeech, cleanTake } from './stems.js';
+import { separateStems, detectSpeech, cleanTake, neuralAvailable } from './stems.js';
 import { runExport, planExport } from './export.js';
+import { podcastExport } from './podcast.js';
 import { AI } from './ai.js';
 import { serveHf } from './hf.js';
 import { exec, probe } from './ffmpeg.js';
@@ -69,7 +70,7 @@ export async function createServer(overrides = {}) {
     const m = req.method;
 
     if (seg[0] === 'health') return json(res, 200, { ok: true, ffmpeg: ffVersion });
-    if (seg[0] === 'system' && m === 'GET') return json(res, 200, { ffmpeg: ffVersion, ai: ai.status(), node: process.version, localOnly: isLocalBind, cwd: cfg.root });
+    if (seg[0] === 'system' && m === 'GET') return json(res, 200, { neuralSeparation: neuralAvailable(cfg), ffmpeg: ffVersion, ai: ai.status(), node: process.version, localOnly: isLocalBind, cwd: cfg.root });
 
     if (seg[0] === 'jobs' && m === 'GET') {
       const j = jobs.get(seg[1]); if (!j) throw new HttpError(404, 'job not found');
@@ -119,7 +120,8 @@ export async function createServer(overrides = {}) {
         return json(res, 202, { job: job.id });
       }
       if (rest[0] === 'stems' && m === 'POST') {
-        const job = jobs.run('stems', (j) => separateStems(cfg, projects, id, j), { projectId: id });
+        const o = await readJson(req).catch(() => ({}));
+        const job = jobs.run('stems', (j) => separateStems(cfg, projects, id, j, { method: o.method || 'auto' }), { projectId: id });
         return json(res, 202, { job: job.id });
       }
       if (rest[0] === 'speech-segments' && m === 'POST') {
@@ -149,6 +151,23 @@ export async function createServer(overrides = {}) {
         const dir = path.join(projects.dir(id), 'renders'); fs.mkdirSync(dir, { recursive: true });
         const n = await streamToFile(req, path.join(dir, rest[1] + '.wav'), 2 * 1024 ** 3);
         return json(res, 201, { name: rest[1], bytes: n });
+      }
+      if (rest[0] === 'recording' && m === 'POST') { // live recording from the browser, streamed in chunks (memory-safe for long sessions)
+        const pr = proj(); const part = path.join(projects.dir(id), 'recording.part');
+        if (rest[1] === 'append') { const chunk = await readBody(req, 64 * 1024 * 1024); fs.appendFileSync(part, chunk); return json(res, 200, { bytes: fs.statSync(part).size }); }
+        if (rest[1] === 'start') { fs.rmSync(part, { force: true }); return json(res, 200, { ok: true }); }
+        if (rest[1] === 'finish') {
+          if (!fs.existsSync(part) || fs.statSync(part).size < 1000) throw new HttpError(400, 'nothing was recorded');
+          const kind = new URL(req.url, 'http://x').searchParams.get('kind') === 'audio' ? 'audio' : 'video';
+          const dest = path.join(projects.dir(id), 'source.webm'); fs.renameSync(part, dest); void kind; void pr;
+          const job = jobs.run('ingest', (j) => ingest(cfg, projects, id, dest, j), { projectId: id });
+          return json(res, 202, { job: job.id });
+        }
+      }
+      if (rest[0] === 'podcast-export' && m === 'POST') {
+        const o = await readJson(req);
+        const job = jobs.run('podcast-export', (j) => podcastExport(cfg, projects, id, o, j), { projectId: id });
+        return json(res, 202, { job: job.id });
       }
       if (rest[0] === 'export' && m === 'POST') {
         const o = await readJson(req);

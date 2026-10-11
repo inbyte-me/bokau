@@ -6,7 +6,7 @@ import { drawWave } from '../audio/peaks.js';
 import { FX_INFO } from '../audio/fx.js';
 import { newCue, newId, newTrack, pickColor, carveClips } from '/shared/project.js';
 
-const H = { ruler: 28, thumbs: 42, orig: 66, cues: 36, flaps: 22, track: 64 };
+const H = { ruler: 28, thumbs: 42, orig: 66, spk: 26, cues: 36, flaps: 22, track: 64 };
 const HASH = (s) => { let x = 0; for (const c of s || '') x = (x * 31 + c.charCodeAt(0)) >>> 0; return x; };
 export const cueColor = (c) => (c.character ? pickColor(HASH(c.character)) : '#e3b04b');
 
@@ -39,7 +39,9 @@ export class Timeline {
 
   // ----- geometry -----
   layout() {
-    const rows = [{ k: 'ruler', h: H.ruler }, { k: 'thumbs', h: H.thumbs }, { k: 'orig', h: H.orig }, { k: 'cues', h: H.cues }, { k: 'flaps', h: H.flaps }];
+    const rows = [{ k: 'ruler', h: H.ruler }, { k: 'thumbs', h: H.thumbs }, { k: 'orig', h: H.orig }];
+    if (this.p.speakers?.segments?.length) rows.push({ k: 'speakers', h: H.spk });
+    rows.push({ k: 'cues', h: H.cues }, { k: 'flaps', h: H.flaps });
     for (const tr of this.tracks) rows.push({ k: 'track', id: tr.id, h: H.track });
     let y = 0; for (const r of rows) { r.y = y; y += r.h; } this.totalH = y; return rows;
   }
@@ -101,7 +103,8 @@ export class Timeline {
             h('input', { type: 'range', min: 0, max: 1.5, step: 0.01, value: o.volume, title: t('Original volume'), oninput: (e) => { app.store.silent((pr) => { pr.original.volume = +e.target.value; }, ['levels']); app.engine.applyLevels(); }, onchange: () => app.store.commit('Original volume', () => {}, ['levels'], { merge: true }) })),
           stems ? h('select', { title: t('Which part of the original to play'), onchange: (e) => { app.store.commit('Original source', (pr) => { pr.original.source = e.target.value; }, ['levels']); app.engine.refresh(); } },
             ...[['full', t('Full mix')], ['bg', t('Music + SFX only')], ['dialogue', t('Dialogue only')]].map(([v, l]) => h('option', { value: v, selected: o.source === v }, l))) : null);
-      } else if (r.k === 'cues') hd.append(h('div.name', t('Cue lane')), h('div.small.dim', t('Double-click to add')));
+      } else if (r.k === 'speakers') hd.append(h('div.name', t('Voices')));
+      else if (r.k === 'cues') hd.append(h('div.name', t('Cue lane')), h('div.small.dim', t('Double-click to add')));
       else if (r.k === 'flaps') hd.append(h('div.name', t('Lip flaps')), h('div.small.dim', t('Drag to draw mouth-open')));
       else {
         const tr = p.tracks.find((x) => x.id === r.id); const sel = app.sel.trackId === tr.id || (!app.sel.trackId && tr === p.tracks[0]);
@@ -171,8 +174,20 @@ export class Timeline {
       if (p.ducking.enabled && app.engine.handle?.duckCurve) { /* drawn below */ }
       c.globalAlpha = 1;
     }
+    // identified voices (who speaks when); muted voices are hatched
+    const sr = rows.find((r) => r.k === 'speakers');
+    if (sr) {
+      const spk = p.speakers; const byId = new Map(spk.list.map((x) => [x.id, x])); const anySolo = spk.list.some((x) => x.solo);
+      spk.segments.forEach((g, gi) => {
+        if (g.end < t0 || g.start > t1) return; const sp = byId.get(g.speaker); const x0 = this.t2x(g.start), x1 = this.t2x(g.end); const off = sp && (sp.muted || (anySolo && !sp.solo));
+        c.fillStyle = (sp?.color || '#8a877e') + (off ? '40' : 'cc'); c.fillRect(x0, sr.y + 3, Math.max(2, x1 - x0), sr.h - 6);
+        if (off) { c.save(); c.beginPath(); c.rect(x0, sr.y + 3, Math.max(2, x1 - x0), sr.h - 6); c.clip(); c.strokeStyle = 'rgba(235,233,228,.45)'; c.lineWidth = 1; for (let hx = x0 - sr.h; hx < x1; hx += 6) { c.beginPath(); c.moveTo(hx, sr.y + sr.h - 3); c.lineTo(hx + sr.h, sr.y + 3); c.stroke(); } c.restore(); }
+        if (app.sel.segIdx === gi) { c.strokeStyle = '#fff'; c.lineWidth = 1.5; c.strokeRect(x0, sr.y + 3, Math.max(2, x1 - x0), sr.h - 6); }
+        if (x1 - x0 > 46) { c.fillStyle = '#111'; c.textAlign = 'left'; c.fillText(sp?.name || '?', x0 + 4, sr.y + sr.h / 2); }
+      });
+    }
     // cues
-    const cr = rows[3];
+    const cr = rows.find((r) => r.k === 'cues');
     for (const cue of p.cues) {
       if (cue.end < t0 || cue.start > t1) continue;
       const x0 = this.t2x(cue.start), x1 = this.t2x(cue.end), col = cueColor(cue); const sel = app.sel.cueId === cue.id;
@@ -181,7 +196,7 @@ export class Timeline {
       c.save(); c.beginPath(); c.rect(x0 + 3, cr.y, Math.max(0, x1 - x0 - 6), cr.h); c.clip(); c.fillStyle = '#14110a'; c.textAlign = 'left'; c.fillText((cue.character ? cue.character + ': ' : '') + cue.text, x0 + 6, cr.y + cr.h / 2); c.restore();
     }
     // lip flaps
-    const fl = rows[4]; c.fillStyle = '#cfc9b8';
+    const fl = rows.find((r) => r.k === 'flaps'); c.fillStyle = '#cfc9b8';
     for (const f of p.lipFlaps) { if (f.end < t0 || f.start > t1) continue; roundRect(c, this.t2x(f.start), fl.y + 4, Math.max(2, this.t2x(f.end) - this.t2x(f.start)), fl.h - 8, 4); c.fill(); }
     // tracks
     const soloAny = p.original.solo || p.tracks.some((x) => x.solo);
@@ -231,6 +246,7 @@ export class Timeline {
       if (r.k === 'ruler') { const fm = (p.markers || []).find((m) => x >= this.t2x(m.t) - 1 && x <= this.t2x(m.t) + 22 && y < 14); if (fm) { app.emit('jump-mark', fm.n); return; } }
       if (r.k === 'ruler' || r.k === 'thumbs') { if (e.shiftKey) { this.drag = { type: 'region', a: tt }; app.sel.region = { start: tt, end: tt }; } else { this.drag = { type: 'scrub' }; app.engine.seek(tt); } return; }
       if (e.shiftKey && (r.k === 'track' || r.k === 'orig')) { this.drag = { type: 'region', a: tt }; app.sel.region = { start: tt, end: tt }; if (r.k === 'track') app.select({ trackId: r.id }); return; }
+      if (r.k === 'speakers') { const gi = p.speakers.segments.findIndex((g) => tt >= g.start && tt < g.end); app.select({ segIdx: gi >= 0 ? gi : null }); app.engine.seek(tt); return; }
       if (r.k === 'cues') {
         if (hit.cue) { app.select({ cueId: hit.cue.id, clipId: null }); this.drag = { type: 'cue-' + hit.edge, cue: hit.cue, x0: x, s0: hit.cue.start, e0: hit.cue.end, before: structuredClone(p.cues), moved: false }; }
         else { app.select({ cueId: null }); app.engine.seek(tt); }

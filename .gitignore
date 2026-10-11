@@ -6,3 +6,8 @@ models/
 test/.tmp/
 .env
 .env.*
+tools/
+/*.mp4
+/*.mov
+/*.mkv
+/*.webm

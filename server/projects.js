@@ -14,7 +14,7 @@ export class Projects {
   create({ name, mode }) {
     const id = 'p' + uid(9);
     fs.mkdirSync(path.join(this.dir(id), 'takes'), { recursive: true });
-    const p = defaultProject({ id, name: (name || 'Untitled').slice(0, 120), mode: mode === 'party' ? 'party' : 'pro' });
+    const p = defaultProject({ id, name: (name || 'Untitled').slice(0, 120), mode: ['party', 'podcast'].includes(mode) ? mode : 'pro' });
     this.save(p);
     return p;
   }

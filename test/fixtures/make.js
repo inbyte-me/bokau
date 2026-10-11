@@ -64,6 +64,29 @@ export function make({ force = false } = {}) {
   video('clip_webm', 'speech_en', { vcodec: 'libvpx', ext: 'webm', dur: 8 });
   video('clip_tall', 'speech_en', { w: 360, h: 640, dur: 6 });
 
+  // three distinct voices taking turns over music, with ground truth: voices.json = [{speaker,start,end}]
+  if (need('clip_voices.mp4')) {
+    const lines = [['Samantha', 'Hello there, how are you doing today?'], ['Daniel', 'I am fine, thank you very much for asking.'], ['Fred', 'Excuse me, is anybody going to make some tea?'], ['Samantha', 'Of course, would you like some sugar with it?'], ['Daniel', 'Yes please, two spoons would be perfect.'], ['Fred', 'And I would like a big piece of chocolate cake.']];
+    const parts = []; const truth = []; let t = 0.8;
+    lines.forEach(([voice, text], i) => { run('say', ['-v', voice, '-o', f(`v${i}.aiff`), text]); ff('-i', f(`v${i}.aiff`), '-ar', '48000', '-ac', '1', '-af', 'loudnorm=I=-20:TP=-2', f(`v${i}.wav`)); const d = Number(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', f(`v${i}.wav`)]).toString()); truth.push({ speaker: voice, start: +t.toFixed(3), end: +(t + d).toFixed(3) }); parts.push(f(`v${i}.wav`)); t += d + 0.7; });
+    const total = Math.ceil(t + 0.5);
+    const inputs = parts.flatMap((p) => ['-i', p]);
+    const delays = truth.map((x, i) => `[${i}:a]adelay=${Math.round(x.start * 1000)}|${Math.round(x.start * 1000)}[d${i}]`).join(';');
+    ff(...inputs, '-filter_complex', `${delays};${truth.map((_, i) => `[d${i}]`).join('')}amix=inputs=${truth.length}:normalize=0,pan=stereo|c0=c0|c1=c0,apad=whole_dur=${total}[v]`, '-map', '[v]', '-t', String(total), f('voices_dialog.wav'));
+    ff('-f', 'lavfi', '-i', `testsrc2=s=640x360:r=25:d=${total}`, '-i', f('voices_dialog.wav'), '-i', f('music.wav'), '-filter_complex', `[2:a]volume=0.5,atrim=0:${total}[m];[1:a][m]amix=inputs=2:normalize=0[a]`, '-map', '0:v', '-map', '[a]', '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-t', String(total), f('clip_voices.mp4'));
+    fs.writeFileSync(f('voices.json'), JSON.stringify(truth));
+  }
+
+  // what MediaRecorder produces: streamed WebM (VP8 + Opus) with no duration / cues
+  if (need('rec_stream.webm')) {
+    const buf = execFileSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-i', f('clip_en.mp4'), '-t', '8', '-c:v', 'libvpx', '-b:v', '600k', '-c:a', 'libopus', '-ac', '1', '-af', 'volume=-14dB', '-f', 'webm', 'pipe:1'], { maxBuffer: 1 << 28 });
+    fs.writeFileSync(f('rec_stream.webm'), buf);
+  }
+  if (need('rec_stream_audio.webm')) {
+    const buf = execFileSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-i', f('clip_en.mp4'), '-t', '8', '-vn', '-c:a', 'libopus', '-ac', '1', '-af', 'volume=-20dB', '-f', 'webm', 'pipe:1'], { maxBuffer: 1 << 28 });
+    fs.writeFileSync(f('rec_stream_audio.webm'), buf);
+  }
+
   if (need('clip_mov.mov')) ff('-i', f('clip_en.mp4'), '-t', '6', '-c:v', 'copy', '-c:a', 'aac', '-f', 'mov', f('clip_mov.mov'));
 
   if (!fs.existsSync(f('sample.srt'))) {

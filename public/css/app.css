@@ -115,6 +115,7 @@ canvas.band { width: 100%; height: 108px; background: #0b0b0a; border: 1px solid
 .chip.mark { font-family: var(--mono); cursor: pointer; background: transparent; color: var(--cue); border-color: #5e4d22; min-height: 0; padding: .05em .5em; }
 
 /* lists */
+.voice-row { gap: .4rem; } .voice-row input { min-height: 1.9em; } .voice-row button { min-height: 1.9em; padding: 0 .5em; } .voice-mute.on { background: transparent; color: var(--faint); text-decoration: line-through; border-style: dashed; }
 .cue-list { display: flex; flex-direction: column; } .cue { padding: .6rem 0; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: .35rem; border-left: 3px solid transparent; padding-left: .5rem; margin-left: -.5rem; }
 .cue.sel { border-left-color: var(--cue); } .cue.active { background: var(--panel2); } .cue textarea { min-height: 2.6em; } .cue .meta { display: flex; gap: .4rem; align-items: center; font-size: .88em; color: var(--dim); }
 .cue .meta input { width: 7.5ch; font-family: var(--mono); font-size: 1em; padding: .1em .3em; min-height: 0; } .cue .meta input.who { width: 10ch; font-family: var(--font); }

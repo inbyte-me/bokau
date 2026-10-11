@@ -9,7 +9,7 @@ class App extends Emitter {
   store = store; engine = engine;
   mic = new Mic(engine);
   session = new RecordSession({ engine, mic: this.mic, store });
-  sel = { trackId: null, cueId: null, clipId: null, region: null /* {start,end} punch/loop */ };
+  sel = { trackId: null, cueId: null, clipId: null, segIdx: null, region: null /* {start,end} punch/loop */ };
   view = { t0: 0, pps: 60 }; // timeline viewport: left edge seconds, pixels per second
   tv = false;
   system = null;

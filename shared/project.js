@@ -2,7 +2,7 @@
 // recordings are immutable files; clips only reference (file, offset, duration).
 
 export const PROJECT_VERSION = 1;
-export const MODES = ['pro', 'party'];
+export const MODES = ['pro', 'party', 'podcast'];
 export const FX_PRESETS = ['none', 'walkie', 'monster', 'helium', 'ghost'];
 
 export function newId(prefix = 'x') {
@@ -27,7 +27,9 @@ export function defaultProject({ id, name = 'Untitled', mode = 'pro' } = {}) {
     tracks: [newTrack({ name: 'Voice 1' })],
     loop: null, // {start,end}
     settings: { preRoll: 3, preRollBeep: true, monitor: false, muteOriginalWhileRecording: false, output: 'headphones' },
+    speakers: { list: [], segments: [] }, // identified voices: [{id,name,color,muted,solo}], [{start,end,speaker}]
     markers: [],
+    podcast: { trim: null, chapters: [], clean: { rumble: true, denoise: false, compress: true }, loudnorm: true, format: 'mp3' },
   };
 }
 
@@ -70,6 +72,8 @@ export function migrate(p) {
   out.ducking = { ...d.ducking, ...p.ducking };
   out.settings = { ...d.settings, ...p.settings };
   out.party = { ...d.party, ...p.party };
+  out.speakers = { list: p.speakers?.list || [], segments: p.speakers?.segments || [] };
+  out.podcast = { ...d.podcast, ...p.podcast, clean: { ...d.podcast.clean, ...p.podcast?.clean } };
   out.tracks = (p.tracks?.length ? p.tracks : d.tracks).map((t, i) => ({ ...newTrack({ index: i }), ...t, clips: t.clips || [], takes: t.takes || [] }));
   out.version = PROJECT_VERSION;
   return out;
