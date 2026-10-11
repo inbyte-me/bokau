@@ -37,6 +37,11 @@ export class Mic extends Emitter {
     this.node.port.onmessage = (e) => this.#onMsg(e.data);
     return this.info;
   }
+  /** processed mono signal (after channel pick + trim) as a MediaStream, for MediaRecorder */
+  get recordStream() {
+    if (!this._recDest) { this._recDest = this.engine.ctx.createMediaStreamDestination(); this._recDest.channelCount = 1; this.trim.connect(this._recDest); }
+    return this._recDest.stream;
+  }
   get channels() { return this.info?.channelCount || 1; }
   #route() {
     try { this.split.disconnect(this.mono); } catch {} // keep the per-channel analysers attached
@@ -66,7 +71,7 @@ export class Mic extends Emitter {
   setMonitor(on, pan = 0) { this.settings.monitor = on; this.settings.monitorPan = pan; if (this.monGain) { this.monGain.gain.setTargetAtTime(on ? 1 : 0, this.engine.ctx.currentTime, 0.02); this.monPan.pan.value = pan; } }
   close() {
     clearInterval(this._chTimer);
-    this.stream?.getTracks().forEach((t) => t.stop());
+    this.stream?.getTracks().forEach((t) => t.stop()); try { this._recDest?.disconnect(); } catch {} this._recDest = null;
     for (const n of [this.src, this.split, this.mono, this.trim, this.node, this.sink, this.monGain, this.monPan]) { try { n?.disconnect(); } catch {} }
     this.stream = null;
   }

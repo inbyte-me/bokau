@@ -34,7 +34,7 @@ async function route() {
   try {
     if (m) {
       const proj = await app.store.open(m[1]);
-      const mod = proj.mode === 'party' ? await import('./ui/party/party.js') : await import('./ui/studio.js');
+      const mod = proj.mode === 'party' ? await import('./ui/party/party.js') : proj.mode === 'podcast' ? await import('./ui/podcast.js') : await import('./ui/studio.js');
       current = await mod.mount(body, { go, topbar: root.firstChild });
     } else { app.store.close(); mountLibrary(body, { go }); }
   } catch (e) { console.error(e); toast(e.message, 'error'); body.append(h('div.empty', { style: { margin: '2rem' } }, e.message, h('div', h('button', { onclick: () => go('/') }, t('Back to projects'))))); }

@@ -13,7 +13,7 @@ npm run doctor     # checks node, ffmpeg, AI key, and which audio inputs macOS c
 Needs: Node ≥ 22 (`nvm use` picks 24 from `.nvmrc`), `ffmpeg` on the PATH, Chrome (Safari/Firefox lack some Web Audio features).
 Put `OPENROUTER_API_KEY=...` in `.env` (git-ignored) to enable AI. Without it everything works; translation is disabled and party games use an offline silly-line generator.
 
-## The two modes
+## The three modes
 
 Choose when creating a project.
 
@@ -28,12 +28,22 @@ Choose when creating a project.
 | Translation assistant | OpenRouter; each line is fitted to the original **syllable count** and to **where the lips close** (M/B/P); one-click apply, one-click undo |
 | Subtitles | import `.srt`/`.vtt`, auto-transcribe on-device (Whisper), export `.srt` / `.json` with timings + character names |
 
+### Podcast
+Record **audio and video** from your camera and microphone (or audio only). The recording is streamed to disk every second, so a crash or a long session can't lose or bloat it. Add **chapters** while recording (press **M**), then in the review screen: trim with draggable handles (**I** / **O**), edit chapters, transcribe on-device, and export **MP3 / M4A (with real chapter marks) / WAV / MP4 / WebM** with optional voice clean-up (rumble filter, noise reduction, gentle compression) and **two-pass loudness normalisation to −16 LUFS**; the measured result is shown after export. A `.srt` transcript and a chapter list come out next to the audio.
+
 ### Parody & Party (TV mode — press **F**)
 Big UI, karaoke lyrics, countdown, "Drama-o-meter". Everyone shares one mic.
 * **Bad Lip Reading** — the AI writes absurd lines that match the syllable count (and, optionally, the *sounds*) of what the mouths say. You read them karaoke-style.
 * **Telenovela Overdrive** — transcribes the scene and rewrites each line as a soap-opera meltdown, with acting directions and a drama score.
 * **Blind Dubbing Challenge** — 4–6 segments; each player improvises over a *silent* segment, seeing only the **last second** of the previous player's performance. Chaotic reveal at the end, every player on their own track with a silly voice effect.
 * **Genre Swapper** — Noir, Pirate, Bad Corporate Speak, 80s Action.
+
+## Voices: dub one character by silencing it
+*Mix → Voices → Identify voices* finds the distinct speakers on the separated dialogue track (a speaker-embedding model running in the browser), shows who speaks when in a **Voices** lane, and gives each character an **On / Off / Solo**. Turn **Character A** off and the original plays without that voice (the music, effects and the other characters stay) while you record your own over it. Rename a character and the cue labels follow. If the automatic count is wrong, pick the number of voices; click a block in the lane to reassign a passage. Muting is by speech turn: where two characters talk at the same moment, the passage belongs to one of them.
+
+## Stem separation
+* **Fast** (instant): 5.1/7.1 uses the clean centre channel; stereo uses centre-channel extraction.
+* **Best quality (neural)**: Demucs `htdemucs` on the CPU, about as long as the clip (a 2-minute clip ≈ 2 minutes on an Intel i7). This is the one that works on **mono** mixes such as most cartoons. One-time install into `./tools`: `npm run setup:separation` (~1 GB, nothing outside the folder is touched).
 
 ## Voice effects and mixing
 Walkie-talkie (band-pass 300 Hz–3.4 kHz + saturation + squelch bursts), Monster (−5…−12 st + warmth), Helium (+7…+12 st **with formant preservation**), Ghost (big reverb, high-frequency roll-off). Pitch shifting is a phase-vocoder written for this app (`public/js/audio/pitch-core.js`), verified numerically by the tests.
@@ -64,7 +74,8 @@ The mix is rendered **in the browser with the same audio graph used for preview*
 * The key never leaves the server; the server only listens on localhost and rejects foreign `Host`/`Origin` headers.
 
 ## Honest limits
-* **Stem separation** is signal-processing, not a neural network: for stereo it extracts the *centre* channel in the 150 Hz–7 kHz band (dialogue is usually centred), for **5.1/7.1** it uses the clean centre channel. Busy mixes with centred music leak; **mono clips can't be separated** (the app says so and suggests ducking instead).
+* **Fast stem separation** is signal processing, not a neural network, so busy stereo mixes with centred music leak and **mono clips can't be split that way**: use *Best quality (neural)* (needs `npm run setup:separation`).
+* **Voice identification** separates *turns*, not overlapping voices: when two characters talk at once the passage is assigned to one of them. It works best on clean dialogue and may merge two similar voices (children, say); use the *number of voices* selector to correct it.
 * **Auto lip-flaps** follow the dialogue's loudness, not the actor's face (no computer vision). For silent clips tap them with **M**.
 * **Speech recognition** is Whisper (tiny/base/small, quantised ONNX) in the browser: `base` is the default (~1× real time on this i7). Recordings made far from the mic are transcribed poorly — the Mic check tells you when that is the case. Models download once into `models/`.
 * `onnxruntime-node` has no Intel-Mac build, so everything ML runs in WASM in the browser.

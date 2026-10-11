@@ -15,7 +15,8 @@ const slider = (label, id, { min, max, step, value, fmt = (v) => v, onInput, onC
 
 export function mountMix(root, { band, stage }) {
   const body = h('div.col'); root.append(body);
-  let neural = false; api.system().then((sy) => { if (sy.neuralSeparation !== neural) { neural = !!sy.neuralSeparation; render(); } }).catch(() => {});
+  let neural = !!app.system?.neuralSeparation; let neuralBtnRef = null;
+  if (!app.system) api.system().then((sy) => { app.system = sy; neural = !!sy.neuralSeparation; if (neuralBtnRef) { neuralBtnRef.disabled = !neural; neuralBtnRef.title = neural ? '' : t('Not installed. Run: npm run setup:separation'); } }).catch(() => {}); // update in place: never re-render under the user's cursor
   function render() {
     clear(body); const p = app.project; const stems = p.stems; const ready = stems?.status === 'ready';
     const stemStatus = h('div.hint#stem-status');
@@ -31,7 +32,7 @@ export function mountMix(root, { band, stage }) {
     };
     const fastBtn = h('button#stems-go', { onclick: () => runStems('auto', fastBtn) }, icon('wave'), ready ? t('Re-separate') : t('Separate dialogue / music'));
     const neuralBtn = h('button#stems-neural', { disabled: !neural, title: neural ? '' : t('Not installed. Run: npm run setup:separation'), onclick: () => runStems('neural', neuralBtn) }, icon('wave'), t('Best quality (neural)'));
-    const sepBtn = h('div.row', fastBtn, neuralBtn);
+    neuralBtnRef = neuralBtn; const sepBtn = h('div.row', fastBtn, neuralBtn);
     body.append(
       h('div.box', h('h4', t('Original audio')), slider(t('Volume'), 'orig-vol', { min: 0, max: 1.5, step: 0.01, value: p.original.volume, fmt: (v) => `${Math.round(v * 100)}%`, onInput: (v) => { p.original.volume = v; app.engine.applyLevels(); }, onChange: () => app.store.commit('Original volume', () => {}, ['levels']) }),
         h('div.field', h('label', t('Play')), h('select#orig-source', { disabled: !ready, onchange: (e) => { app.store.commit('Original source', (pr) => { pr.original.source = e.target.value; }, ['levels']); app.engine.refresh(); } },

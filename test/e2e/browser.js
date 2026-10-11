@@ -30,6 +30,7 @@ export async function injectFakeMic(page, wavFile, { channels = 2, only = null, 
     const real = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
     navigator.mediaDevices.getUserMedia = async (c) => {
       if (!c?.audio) return real(c);
+      const camStream = c.video ? await real({ video: c.video, audio: false }) : null;
       const ctx = new AudioContext({ sampleRate: rate });
       const ab = Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0)).buffer;
       const buf = await ctx.decodeAudioData(ab);
@@ -38,7 +39,7 @@ export async function injectFakeMic(page, wavFile, { channels = 2, only = null, 
       if (only == null) src.connect(dest);
       else { const sp = ctx.createChannelSplitter(1); const mg = ctx.createChannelMerger(channels); src.connect(sp); sp.connect(mg, 0, only); mg.connect(dest); } // signal on one input only, like a budget interface
       src.start();
-      const stream = dest.stream; const tr = stream.getAudioTracks()[0];
+      const stream = dest.stream; const tr = stream.getAudioTracks()[0]; camStream?.getVideoTracks().forEach((v) => stream.addTrack(v));
       Object.defineProperty(tr, 'label', { value: 'Test microphone (synthetic)' });
       const gs = tr.getSettings.bind(tr); tr.getSettings = () => ({ ...gs(), channelCount: channels, sampleRate: rate, deviceId: 'default' });
       return stream;
