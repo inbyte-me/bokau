@@ -7,7 +7,7 @@ export async function launch({ fakeMic = null, headless = true, width = 1440, he
   const args = ['--no-first-run', '--autoplay-policy=no-user-gesture-required', '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream',
     '--disable-features=Translate,MediaRouter', '--mute-audio', `--window-size=${width},${height}`];
   if (fakeMic) args.push(`--use-file-for-fake-audio-capture=${fakeMic}`);
-  const browser = await puppeteer.launch({ executablePath: CHROME, headless: headless ? 'new' : false, args, defaultViewport: { width, height } });
+  const browser = await puppeteer.launch({ executablePath: CHROME, headless: headless ? 'new' : false, args, defaultViewport: { width, height }, protocolTimeout: 600000 });
   return browser;
 }
 

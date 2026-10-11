@@ -40,9 +40,10 @@ export async function buildMix(ctx, project, assets, opts) {
       const src = ctx.createBufferSource(); src.buffer = buf;
       const g = ctx.createGain(); g.gain.value = project.original.volume;
       const duck = ctx.createGain(); duck.gain.value = 1;
-      src.connect(g); g.connect(duck); duck.connect(master);
+      const liveDuck = ctx.createGain(); liveDuck.gain.value = 1; // driven by the live mic while recording
+      src.connect(g); g.connect(duck); duck.connect(liveDuck); liveDuck.connect(master);
       src.start(when, Math.min(from, buf.duration), Math.max(0, Math.min(duration, buf.duration - from)));
-      sources.push(src); handle.nodes.origGain = g; handle.nodes.duck = duck; handle.nodes.liveDuck = duck;
+      sources.push(src); handle.nodes.origGain = g; handle.nodes.duck = duck; handle.nodes.liveDuck = liveDuck;
       if (ducking && project.ducking.enabled && include.voices) {
         const d = computeDuckCurve(project, assets, { duration: assets.totalDuration ?? (from + duration), audibleTrack });
         const i0 = Math.max(0, Math.floor(from * d.rate));
