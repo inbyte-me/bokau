@@ -16,7 +16,7 @@ import { exec, probe } from './ffmpeg.js';
 import { registerAiRoutes } from './aiRoutes.js';
 import { parseSubs } from '../shared/srt.js';
 
-const MEDIA_FILES = /^(proxy\.mp4|poster\.jpg|thumbs\.jpg|audio_orig\.wav|audio_16k\.wav|stem_dialogue\.wav|stem_bg\.wav|takes\/[\w.\-]+\.wav|exports\/[\w.\-]+(\/[\w.\-]+)?)$/;
+const MEDIA_FILES = /^(source\.(webm|mp4|mov|mkv|m4v)|proxy\.mp4|poster\.jpg|thumbs\.jpg|audio_orig\.wav|audio_16k\.wav|stem_dialogue\.wav|stem_bg\.wav|takes\/[\w.\-]+\.wav|exports\/[\w.\-]+(\/[\w.\-]+)?)$/;
 
 export async function createServer(overrides = {}) {
   const cfg = makeConfig(overrides);
@@ -50,7 +50,7 @@ export async function createServer(overrides = {}) {
         const [, , id, ...rest] = p.split('/');
         const name = rest.join('/');
         if (!isId(id) || !MEDIA_FILES.test(name) || name.includes('..')) throw new HttpError(404, 'not found');
-        return serveFile(req, res, path.join(projects.dir(id), name), { download: p.includes('/exports/') ? path.basename(name) : undefined });
+        return serveFile(req, res, path.join(projects.dir(id), name), { download: p.includes('/exports/') ? path.basename(name) : /^source\./.test(name) ? `${safeName(projects.get(id).name, 'recording')}_original${path.extname(name)}` : undefined });
       }
       if (p.startsWith('/hf/')) return serveHf(cfg, req, res, p);
       if (p.startsWith('/vendor/transformers/')) return serveFile(req, res, safeJoin(path.join(cfg.root, 'node_modules/@huggingface/transformers/dist'), p.slice(21)), { cache: 'public, max-age=86400' });

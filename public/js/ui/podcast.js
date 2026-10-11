@@ -150,6 +150,7 @@ async function review(root, { go }) {
   } }, icon('export'), t('Export'));
 
   const side = h('div.pod-side', h('h1', p.name),
+    h('div.hint#pod-saved', t('Your recording is already saved automatically. Choose a format and press Export to get a file, or download the untouched original.'), ' ', h('a#pod-original', { href: `/media/${p.id}/${p.media.sourceFile}`, download: '' }, t('Download original'))),
     h('div.box', h('h4', t('Trim')), h('div.row', h('button#trim-in', { onclick: () => setTrim({ start: engine.time }) }, t('Start here (I)')), h('button#trim-out', { onclick: () => setTrim({ end: engine.time }) }, t('End here (O)')), h('button.ghost', { onclick: () => store.commit('Clear trim', (pr) => { pr.podcast.trim = null; }, ['podcast']) }, t('Clear'))), trimInfo),
     h('div.box', h('h4', t('Chapters')), h('button#pod-add-chapter', { onclick: addChapter }, icon('flag'), t('Add chapter at playhead (M)')), chapList),
     h('div.box', h('h4', t('Transcript')), h('div.row', lang, transcribe), sttStatus),

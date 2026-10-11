@@ -277,6 +277,8 @@ export const es = {
   'Starting speech recognition…': 'Iniciando el reconocimiento de voz…',
   'Format': 'Formato',
   'peak': 'pico',
+  'Your recording is already saved automatically. Choose a format and press Export to get a file, or download the untouched original.': 'Tu grabación ya se guardó automáticamente. Elige un formato y presiona Exportar para obtener un archivo, o descarga el original sin modificar.',
+  'Download original': 'Descargar el original',
   'bad': 'mal', 'Two people arguing about lost cheese': 'Dos personas discutiendo por un queso perdido',
   'two people arguing about lost cheese': 'dos personas discutiendo por un queso perdido', 'a cooking show where everything catches fire': 'un programa de cocina donde todo se incendia',
   'a dramatic breakup over a WiFi password': 'una ruptura dramática por la contraseña del WiFi', 'two spies who forgot the secret code': 'dos espías que olvidaron la clave secreta', 'a nature documentary about a very lazy cat': 'un documental de naturaleza sobre un gato muy flojo',

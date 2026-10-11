@@ -13,7 +13,9 @@
     "doctor": "node scripts/doctor.mjs",
     "test:live": "LIVE_MIC=1 node --test test/e2e/live-mic.test.js",
     "watch:interface": "node scripts/watch-interface.mjs",
-    "setup:separation": "bash scripts/setup-separation.sh"
+    "setup:separation": "bash scripts/setup-separation.sh",
+    "watch:hardware": "node scripts/watch-hardware.mjs",
+    "test:live-output": "LIVE_MIC=1 node --test test/e2e/live-output.test.js"
   },
   "engines": {
     "node": ">=22"
