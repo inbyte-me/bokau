@@ -15,6 +15,20 @@ export class RecordSession extends Emitter {
   stop() { this.stopRequested = true; this.emit('stop-requested'); }
 
   /**
+   * Jump the playhead while recording (marks). The mic keeps capturing; the capture is split at the jump so that
+   * each part is placed on the timeline according to where the picture really was.
+   */
+  async jump(t) {
+    const { engine } = this; t = clamp(t, 0, engine.duration);
+    if (this.state === 'countdown') { this._retarget = t; engine.seek(t); return true; }
+    if (this.state !== 'recording' || !this._segs) return false;
+    const goAt = engine.ctx.currentTime + 0.06;
+    this._segs.push({ idx: Math.max(0, Math.round(goAt * engine.ctx.sampleRate) - this._startFrame), start: t, goAt, jumped: true });
+    await engine.playAt(t, goAt, { to: engine.duration });
+    this.emit('jump', t); return true;
+  }
+
+  /**
    * opts: { trackId, start, end?, loop?, cueId? }
    * returns array of take objects created.
    */
@@ -45,7 +59,8 @@ export class RecordSession extends Emitter {
         // 2. start capture a hair before GO; playback is anchored to GO
         await this.#waitUntil(goAt - 0.08);
         if (this.stopRequested) break;
-        const startFrame = await mic.startCapture();
+        if (this._retarget != null) { start = this._retarget; this._retarget = null; end = null; }
+        const startFrame = await mic.startCapture(); this._startFrame = startFrame; this._segs = [{ idx: 0, start, goAt }];
         await engine.playAt(start, goAt, { to: end ?? dur });
         if (!this.stopRequested) { await this.#waitUntil(goAt); if (preRoll >= 1) this.emit('countdown', 0); }
         this.state = 'recording'; this.emit('state', 'recording', { pass, start, end });
@@ -53,12 +68,11 @@ export class RecordSession extends Emitter {
         // 3. wait for range end or user stop
         await new Promise((res) => { const a = engine.on('ended', () => { a(); b(); res(); }); const b = this.on('stop-requested', () => { a(); b(); res(); }); });
         offLevel();
-        const stopTime = engine.time;
         const samples = await mic.stopCapture();
         engine.pause();
-        // 4. build the take
-        const take = this.#makeTake({ samples, startFrame, goAt, start, end, stopTime, sr, trackId, cueId });
-        if (take) { takes.push(take.take); this.emit('take', take.take); }
+        // 4. build the take(s): one per capture segment (a jump to a mark starts a new segment)
+        const made = this.#makeTakes({ samples, startFrame, segs: this._segs, end: this._segs.length > 1 ? null : end, sr, trackId, cueId });
+        this._segs = null; for (const tk of made) { takes.push(tk); this.emit('take', tk); }
         pass++;
         if (loop && !this.stopRequested) await new Promise((r) => setTimeout(r, 120));
       } while (loop && !this.stopRequested);
@@ -90,31 +104,39 @@ export class RecordSession extends Emitter {
     return () => { off(); try { node.gain.setTargetAtTime(1, this.engine.ctx.currentTime, 0.05); } catch {} };
   }
 
-  #makeTake({ samples, startFrame, goAt, start, end, sr, trackId, cueId }) {
+  #makeTakes({ samples, startFrame, segs, end, sr, trackId, cueId }) {
     const { store, engine } = this;
-    const p = store.project; const track = p.tracks.find((t) => t.id === trackId); if (!track) return null;
+    const p = store.project; const track = p.tracks.find((t) => t.id === trackId); if (!track) return [];
     const L = Math.max(0, p.latencyMs) / 1000;
-    const c0 = startFrame / sr;
-    // timeline time of sample j: start + (c0 + j/sr - goAt) - L. Keep samples from timeline >= start.
-    let j0 = Math.max(0, Math.ceil((L + goAt - c0) * sr));
-    let jEnd = samples.length;
-    const clipStart = start + (c0 + j0 / sr - goAt) - L;
-    if (end != null) jEnd = Math.min(jEnd, j0 + Math.floor((end - clipStart) * sr));
-    if (jEnd - j0 < sr * 0.15) return null; // accidental tap
-    const data = samples.slice(j0, jEnd); const duration = data.length / sr;
-    const id = newId('k'); const file = `take_${id}.wav`;
-    const take = { id, file, start: clipStart, duration, createdAt: new Date().toISOString(), cueId, label: `Take ${track.takes.length + 1}`, latencyMs: Math.round(L * 1000) };
-    engine.assets.addTake(file, (() => { const b = engine.ctx.createBuffer(1, data.length, sr); b.copyToChannel(data, 0); return b; })());
+    const made = [];
+    segs.forEach((seg, i) => {
+      const a = Math.min(samples.length, seg.idx), bIdx = i + 1 < segs.length ? Math.min(samples.length, segs[i + 1].idx) : samples.length;
+      const c0 = (startFrame + a) / sr; // ctx time of the segment's first sample
+      // timeline time of segment sample j (from a): seg.start + (c0 + j/sr - seg.goAt) - L ; keep samples at/after seg.start
+      const j0 = Math.max(0, Math.ceil((L + seg.goAt - c0) * sr));
+      let jEnd = bIdx - a;
+      const clipStart = seg.start + (c0 + j0 / sr - seg.goAt) - L;
+      if (end != null && i === 0) jEnd = Math.min(jEnd, j0 + Math.floor((end - clipStart) * sr));
+      if (jEnd - j0 < sr * 0.15) return; // accidental tap / tiny fragment
+      const data = samples.slice(a + j0, a + jEnd); const duration = data.length / sr;
+      const id = newId('k'); const file = `take_${id}.wav`;
+      const take = { id, file, start: clipStart, duration, createdAt: new Date().toISOString(), cueId, label: `Take ${track.takes.length + made.length + 1}${segs.length > 1 ? ` (${i + 1}/${segs.length})` : ''}`, latencyMs: Math.round(L * 1000) };
+      const buf = engine.ctx.createBuffer(1, data.length, sr); buf.copyToChannel(data, 0); engine.assets.addTake(file, buf);
+      made.push({ take, data });
+    });
+    if (!made.length) return [];
     store.commit('Record take', (pr) => {
       const t = pr.tracks.find((x) => x.id === trackId);
-      t.takes.push(take);
-      t.clips = [...carveClips(t.clips, take.start, take.start + take.duration), { id: newId('c'), file, takeId: id, start: take.start, offset: 0, duration, gain: 1 }].sort((a, b) => a.start - b.start);
+      for (const { take } of made) {
+        t.takes.push(take);
+        t.clips = [...carveClips(t.clips, take.start, take.start + take.duration), { id: newId('c'), file: take.file, takeId: take.id, start: take.start, offset: 0, duration: take.duration, gain: 1 }].sort((x, y) => x.start - y.start);
+      }
     }, ['tracks', 'takes']);
-    // upload dry take in the background
-    const blob = encodeWav([data], sr, 16);
-    const up = fetch(`/api/projects/${p.id}/takes/${file}`, { method: 'POST', body: blob }).then((r) => { if (!r.ok) throw new Error('upload ' + r.status); }).catch((e) => { console.error('take upload failed', e); this.emit('upload-error', e); }).finally(() => this.uploads.delete(up));
-    this.uploads.add(up);
-    return { take };
+    for (const { take, data } of made) { // upload the dry takes in the background
+      const up = fetch(`/api/projects/${p.id}/takes/${take.file}`, { method: 'POST', body: encodeWav([data], sr, 16) }).then((r) => { if (!r.ok) throw new Error('upload ' + r.status); }).catch((e) => { console.error('take upload failed', e); this.emit('upload-error', e); }).finally(() => this.uploads.delete(up));
+      this.uploads.add(up);
+    }
+    return made.map((m) => m.take);
   }
 }
 

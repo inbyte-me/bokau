@@ -12,7 +12,7 @@ test.before(async () => {
   app = await startApp(); browser = await launch();
   id = await app.ingestFixture('clip_en.mp4');
   page = await browser.newPage(); page.on('console', (m) => logs.push(m.text())); page.on('pageerror', (e) => logs.push('PAGEERROR ' + e.message));
-  await injectFakeMic(page, fx('mic_speech.wav')); await page.goto(app.base + `/#/p/${id}`, { waitUntil: 'domcontentloaded' });
+  await page.evaluateOnNewDocument(() => localStorage.setItem('lang', 'en')); await injectFakeMic(page, fx('mic_speech.wav')); await page.goto(app.base + `/#/p/${id}`, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('#timeline-canvas', { timeout: 30000 });
   await until(() => window.__app?.engine?.assets?.orig, 15000, 'audio loaded');
   await page.evaluate(() => { const a = window.__app; a.store.commit('fast count-in', (p) => { p.settings.preRoll = 1; p.settings.muteOriginalWhileRecording = false; }, ['settings']); });
@@ -151,4 +151,43 @@ test('export from the UI: renders in the browser, muxes on the server, recorded 
 test('no unexpected console errors during the whole session', async () => {
   const bad = logs.filter((l) => /PAGEERROR|Uncaught|Failed to load resource: the server responded with a status of 5/i.test(l));
   assert.deepEqual(bad, []);
+});
+
+test('marks: ⌘/Ctrl+digit sets, ⌥+digit jumps; paused stays paused, playing keeps playing', async () => {
+  const key = async (mod, code) => { await page.keyboard.down(mod); await page.keyboard.press(code); await page.keyboard.up(mod); };
+  await page.evaluate(() => { window.__app.store.commit('reset', (p) => { p.markers = []; }, ['markers']); window.__app.engine.pause(); window.__app.engine.seek(3.25); });
+  await page.evaluate(() => document.activeElement?.blur?.());
+  await key('Control', 'Digit2'); await key('Meta', 'Digit3'); // 3 is set at the same spot; then move and set 1
+  await page.evaluate(() => window.__app.engine.seek(8)); await key('Shift', 'Digit1');
+  const marks = await page.evaluate(() => window.__app.project.markers.map((m) => [m.n, +m.t.toFixed(2)])); assert.deepEqual(marks, [[1, 8], [2, 3.25], [3, 3.25]]);
+  await page.waitForSelector('#marks-bar .mark'); assert.equal((await page.$$('#marks-bar .mark')).length, 3);
+  // paused: jump keeps it paused
+  await key('Alt', 'Digit2'); let st = await page.evaluate(() => ({ t: window.__app.engine.time, playing: window.__app.engine.playing })); assert.ok(Math.abs(st.t - 3.25) < 0.01 && !st.playing, JSON.stringify(st));
+  // playing: jump continues playing from the mark
+  await page.evaluate(() => window.__app.engine.play(0)); await until(() => window.__app.engine.playing && window.__app.engine.time > 0.4, 5000, 'playing');
+  await key('Alt', 'Digit1'); await wait(250); st = await page.evaluate(() => ({ t: window.__app.engine.time, playing: window.__app.engine.playing, vt: document.getElementById('video').currentTime })); assert.ok(st.playing && st.t > 8 && st.t < 8.8, 'continues playing from mark 1: ' + JSON.stringify(st));
+  assert.ok(Math.abs(st.vt - st.t) < 0.4, 'video follows the jump');
+  await page.evaluate(() => window.__app.engine.pause());
+  // clicking a marks-bar chip jumps too
+  await page.click('#marks-bar .mark[data-n="2"]'); assert.ok(Math.abs((await page.evaluate(() => window.__app.engine.time)) - 3.25) < 0.01);
+});
+
+test('marks while recording: jumping back keeps recording, splits the take, and overwrites what is there', async () => {
+  await openMic();
+  const key = async (mod, code) => { await page.keyboard.down(mod); await page.keyboard.press(code); await page.keyboard.up(mod); };
+  await page.evaluate(() => { const a = window.__app; a.store.commit('reset', (p) => { p.tracks[0].clips = []; p.tracks[0].takes = []; p.markers = [{ id: 'm1', n: 1, t: 2 }]; p.settings.preRoll = 1; }, ['tracks', 'markers']); a.engine.pause(); a.engine.seek(6); document.activeElement?.blur?.(); });
+  await page.click('#rec'); await until(() => window.__app.session.state === 'recording', 10000, 'recording');
+  await wait(1800);                                  // records ~6.0 .. 7.8
+  await key('Alt', 'Digit1');                        // jump back to mark 1 (t=2) while recording
+  await wait(250); assert.equal(await page.evaluate(() => window.__app.session.state), 'recording', 'still recording after the jump');
+  const t1 = await page.evaluate(() => window.__app.engine.time); assert.ok(t1 > 2 && t1 < 3, 'playhead jumped back: ' + t1);
+  assert.equal(await page.evaluate(() => window.__app.engine.playing), true);
+  await wait(1800);                                  // records ~2.0 .. 3.8 (and keeps going)
+  await page.click('#rec'); await until(() => window.__app.session.state === 'idle', 10000, 'stopped');
+  const clips = (await project()).tracks[0].clips; assert.equal(clips.length, 2, JSON.stringify(clips.map((c) => [c.start, c.duration])));
+  const [a, b] = clips; // sorted by start
+  assert.ok(a.start > 1.9 && a.start < 2.3, 'second part sits at the mark: ' + a.start); assert.ok(a.duration > 1.4, 'a ' + a.duration);
+  assert.ok(b.start > 5.9 && b.start < 6.3, 'first part stays where recording began: ' + b.start); assert.ok(b.duration > 1.3 && b.duration < 2.4, 'b ' + b.duration);
+  // now record over part of it: punching again at mark 1 replaces the clip content there but keeps earlier takes in the take list
+  const takes = (await project()).tracks[0].takes; assert.equal(takes.length, 2);
 });

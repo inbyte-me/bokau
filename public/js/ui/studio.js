@@ -12,6 +12,18 @@ import { mountTakes } from './panels/takes.js';
 import { mountAi } from './panels/ai.js';
 import { exportDialog } from './export.js';
 
+const SHORTCUTS = [
+  ['Space', 'Play / pause'], ['R', 'Record / stop (uses the “What to record” mode)'], ['Esc', 'Stop everything'], ['← →', 'Step one frame (Shift: one second)'], ['Home / End', 'Go to start / end'],
+  ['⌘/Ctrl + 1…9', 'Set mark (Shift + 1…9 also works if the browser keeps ⌘+number)'], ['⌥/Option + 1…9', 'Jump to mark — keeps playing / recording / paused as it was'],
+  ['I / O', 'Set range in / out at the playhead'], ['L', 'Loop the selected cue or range'], ['S', 'Split the clip at the playhead'], ['Delete', 'Delete selected clip or cue'],
+  ['M (hold)', 'Mark mouth-open while playing'], ['⌘/Ctrl + Z / ⇧Z', 'Undo / redo'], ['+ / −', 'Zoom the timeline'], ['F', 'TV mode'], ['?', 'This help'],
+];
+export function shortcutsModal() {
+  const back = h('div.modal-back', { onclick: (e) => e.target === back && back.remove() });
+  back.append(h('div.modal', { id: 'shortcuts' }, h('h2', '⌨ ' + t('Keyboard shortcuts')), h('div.col', ...SHORTCUTS.map(([k, d]) => h('div.row', h('div', { style: { minWidth: '11em' } }, ...k.split(' ').map((x) => (/^[+/…−]$|^or$/.test(x) ? ` ${x} ` : h('kbd', x)))), h('div.dim', t(d))))), h('div.actions', h('button.primary', { onclick: () => back.remove() }, t('Close')))));
+  document.body.append(back);
+}
+
 export async function mount(root, { go, topbar }) {
   const { store, engine, session, mic } = app; const p = store.project;
   const stage = new Stage();
@@ -27,7 +39,7 @@ export async function mount(root, { go, topbar }) {
   const saveEl = h('div.savestate', '');
   const undoBtn = h('button.icon#undo', { title: t('Undo (Ctrl/⌘+Z)'), onclick: () => { const l = store.undo(); if (l) { engine.refresh(); toast(`↶ ${l}`); } } }, '↶');
   const redoBtn = h('button.icon#redo', { title: t('Redo'), onclick: () => { const l = store.redo(); if (l) { engine.refresh(); toast(`↷ ${l}`); } } }, '↷');
-  topbar.querySelector('.spacer').before(title, undoBtn, redoBtn, saveEl, h('button.primary#export-btn', { onclick: () => exportDialog() }, '⬆ ' + t('Export')));
+  topbar.querySelector('.spacer').before(title, undoBtn, redoBtn, saveEl, h('button.primary#export-btn', { onclick: () => exportDialog() }, '⬆ ' + t('Export')), h('button.icon#help-btn', { title: t('Keyboard shortcuts (?)'), onclick: shortcutsModal }, '⌨'));
   const offSave = store.on('save-state', (s) => { saveEl.textContent = { saved: '✓ ' + t('saved'), dirty: '…', saving: t('saving…'), error: t('save failed') }[s] || ''; saveEl.className = 'savestate ' + (s === 'error' ? 'error' : ''); });
   saveEl.textContent = '✓ ' + t('saved');
 
@@ -95,11 +107,29 @@ export async function mount(root, { go, topbar }) {
   const trackChip = () => { const el = transport.querySelector('#track-chip'); const tr = app.track; el.textContent = tr?.name || ''; el.style.color = tr?.color; };
   trackChip(); undoBtn.disabled = true; redoBtn.disabled = true;
 
+  // ---- marks: ⌘/Ctrl+digit (or Shift+digit) sets, ⌥/Option+digit jumps; keeps playing/recording/paused state ----
+  const fmtMark = (tm) => fmtClock(tm, { ms: true });
+  function setMark(n) {
+    const tm = engine.time; store.commit('Set mark', (pr) => { pr.markers = (pr.markers || []).filter((m) => m.n !== n); pr.markers.push({ id: 'm' + n, n, t: tm }); pr.markers.sort((a, b) => a.n - b.n); }, ['markers']);
+    toast(`🚩 ${t('Mark')} ${n} · ${fmtMark(tm)}`, 'ok', 1500);
+  }
+  async function jumpMark(n) {
+    const m = (store.project.markers || []).find((x) => x.n === n); if (!m) return toast(`${t('No mark')} ${n} — ${t('set one with ⌘/Ctrl+number')}`, 'error', 2200);
+    if (session.state !== 'idle') await session.jump(m.t); else engine.seek(m.t); // seek keeps a paused transport paused and a playing one playing
+  }
+  app.on('jump-mark', jumpMark); app.on('delete-mark', (n) => store.commit('Delete mark', (pr) => { pr.markers = pr.markers.filter((m) => m.n !== n); }, ['markers']));
+
   // lip-flap tapping with the M key: hold while the mouth is open
   let tapStart = null;
   const onKey = (e) => {
     const tag = document.activeElement?.tagName; if (/INPUT|TEXTAREA|SELECT/.test(tag) && !(e.key === 'Escape')) return;
     const mod = e.metaKey || e.ctrlKey;
+    const dg = /^(?:Digit|Numpad)(\d)$/.exec(e.code || '');
+    if (dg) { // e.code, because Option+digit types symbols on macOS
+      const n = +dg[1];
+      if (mod || (e.shiftKey && !e.altKey)) { e.preventDefault(); setMark(n); return; }
+      if (e.altKey) { e.preventDefault(); jumpMark(n); return; }
+    }
     if (e.key === ' ') { e.preventDefault(); togglePlay(); }
     else if (e.key === 'r' || e.key === 'R') { if (!mod) { e.preventDefault(); toggleRecord(); } }
     else if (e.key === 'Escape') { stopAll(); }
@@ -114,6 +144,7 @@ export async function mount(root, { go, topbar }) {
     else if (e.key === '=' || e.key === '+') tl.zoom(1.4); else if (e.key === '-') tl.zoom(0.7);
     else if (e.key === 'i' || e.key === 'I') { app.sel.region = { start: engine.time, end: app.sel.region?.end > engine.time ? app.sel.region.end : Math.min(engine.duration, engine.time + 2) }; tl.invalidate(); app.emit('selection', app.sel); }
     else if (e.key === 'o' || e.key === 'O') { const s = app.sel.region?.start ?? Math.max(0, engine.time - 2); app.sel.region = { start: Math.min(s, engine.time - 0.1), end: engine.time }; tl.invalidate(); app.emit('selection', app.sel); }
+    else if (e.key === '?') shortcutsModal();
     else if ((e.key === 'f' || e.key === 'F') && !mod) import('../main.js').then((m) => m.toggleTv());
     else if ((e.key === 'm' || e.key === 'M') && !e.repeat && engine.playing && tapStart == null) tapStart = engine.time;
   };

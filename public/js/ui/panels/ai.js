@@ -27,8 +27,9 @@ export function mountAi(root) {
       const r = await rewriteCues(kind, cues, { fromLang: from.value || undefined, outLang: kind === 'translate' ? to.value : (from.value || undefined), genre, extra: extra.value || undefined });
       clear(results);
       results.append(h('div.hint', `${r.source === 'ai' ? '🤖 ' + (r.model || '') : '📴 ' + t('offline generator')}${r.costUsd ? ` · $${r.costUsd.toFixed(5)}` : ''}${r.notice ? ' · ' + r.notice : ''}`));
-      const apply = (l) => { const cue = app.project.cues.find((c) => c.id === l.id); if (!cue) return; app.store.commit('AI rewrite', () => { cue.orig ??= cue.text; cue.text = l.text; if (l.character && !cue.character) cue.character = l.character; if (l.direction) cue.direction = l.direction; }, ['cues']); };
-      results.append(h('div.row', h('button.primary#ai-apply-all', { onclick: () => { r.lines.filter((l) => l.changed).forEach(apply); toast(t('Applied'), 'ok'); } }, t('Apply all')), h('button', { onclick: () => clear(results) }, t('Discard'))));
+      const applyMany = (ls) => app.store.commit('AI rewrite', (pr) => { for (const l of ls) { const cue = pr.cues.find((c) => c.id === l.id); if (!cue) continue; cue.orig ??= cue.text; cue.text = l.text; if (l.character && !cue.character) cue.character = l.character; if (l.direction) cue.direction = l.direction; } }, ['cues']);
+      const apply = (l) => applyMany([l]);
+      results.append(h('div.row', h('button.primary#ai-apply-all', { onclick: () => { applyMany(r.lines.filter((l) => l.changed)); toast(t('Applied'), 'ok'); } }, t('Apply all')), h('button', { onclick: () => clear(results) }, t('Discard'))));
       for (const l of r.lines) {
         const cue = app.project.cues.find((c) => c.id === l.id); const diff = l.syllables - l.target;
         results.append(h('div.cue', h('div.small.dim', cue?.text), h('div', { style: { fontWeight: 600 } }, l.text), l.direction ? h('div.small.dim', `🎭 ${l.direction}`) : null,

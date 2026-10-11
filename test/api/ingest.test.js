@@ -65,6 +65,7 @@ test('ingest via upload (raw body) + webm + silent + portrait + 5.1', async () =
     ['clip_silent.mp4', (m) => m.hasVideo && !m.hasAudio],
     ['clip_tall.mp4', (m) => m.height > m.width],
     ['clip_51.mkv', (m) => m.channels === 6],
+    ['clip_mov.mov', (m) => m.hasVideo && m.hasAudio && m.vcodec === 'h264'],
   ]) {
     const { data: proj } = await app.api('POST', '/api/projects', { name, mode: 'pro' });
     const r = await app.api('POST', `/api/projects/${proj.id}/source`, fs.readFileSync(fx(name)), { 'x-filename': name });

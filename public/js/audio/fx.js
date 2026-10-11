@@ -62,11 +62,12 @@ export function createFx(ctx, preset = 'none', amount = 1) {
 
   switch (preset) {
     case 'walkie': {
-      const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 300; hp.Q.value = 0.8;
-      const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 3400; lp.Q.value = 0.8;
+      const filt = (type, f) => { const b = ctx.createBiquadFilter(); b.type = type; b.frequency.value = f; b.Q.value = 0.707; return b; };
+      // 4-pole band-pass like a real radio: two cascaded high-passes (300 Hz) and low-passes (3.4 kHz)
       const sat = saturator(ctx, 1.5 + 5 * amount);
+      const post = filt('lowpass', 3600); // tame the harmonics the saturator adds
       const mk = ctx.createGain(); mk.gain.value = 0.85;
-      chain(hp, lp, sat, mk);
+      chain(filt('highpass', 300), filt('highpass', 300), filt('lowpass', 3400), filt('lowpass', 3400), sat, post, mk);
       fx.decorate = (when, dur) => {
         // squelch bursts at key-up / key-down + a faint carrier hiss while "transmitting"
         const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 2200; bp.Q.value = 0.6;

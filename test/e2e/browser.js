@@ -4,7 +4,7 @@ import fs from 'node:fs';
 const CHROME = process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 
 export async function launch({ fakeMic = null, realMic = false, headless = true, width = 1440, height = 900 } = {}) {
-  const args = ['--no-first-run', '--autoplay-policy=no-user-gesture-required', '--use-fake-ui-for-media-stream', ...(realMic ? [] : ['--use-fake-device-for-media-stream']),
+  const args = ['--no-first-run', `--lang=${process.env.E2E_LANG || 'en-US'}`, '--autoplay-policy=no-user-gesture-required', '--use-fake-ui-for-media-stream', ...(realMic ? [] : ['--use-fake-device-for-media-stream']),
     '--disable-features=Translate,MediaRouter', '--mute-audio', `--window-size=${width},${height}`];
   if (fakeMic) args.push(`--use-file-for-fake-audio-capture=${fakeMic}`);
   const browser = await puppeteer.launch({ executablePath: CHROME, headless: headless ? 'new' : false, args, defaultViewport: { width, height }, protocolTimeout: 600000 });

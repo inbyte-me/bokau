@@ -24,7 +24,7 @@ export class Timeline {
     this.ro = new ResizeObserver(() => { this.#resize(); }); this.ro.observe(this.wrap);
     this.#bind(); this.rebuild();
     this.off = [
-      app.store.on('change', (k) => { if (k.has('tracks') || k.has('all') || k.has('media')) this.rebuild(); else this.invalidate(); }),
+      app.store.on('change', (k) => { if (k.has('tracks') || k.has('all') || k.has('media')) this.rebuild(); else { if (k.has('markers')) this.#marksBar(); this.invalidate(); } }),
       app.on('selection', () => { this.rebuild(); }),
       app.engine.on('time', () => this.#followAndDraw()), app.engine.on('pause', () => this.invalidate()),
     ];
@@ -69,15 +69,23 @@ export class Timeline {
   // ----- toolbar + headers -----
   #toolbar() {
     const b = (label, fn, title, id) => h('button.icon', { title, id, onclick: fn }, label);
-    return h('div.tl-toolbar', b('－', () => this.zoom(0.7), t('Zoom out (-)')), b('＋', () => this.zoom(1.4), t('Zoom in (+)')), b('⤢', () => this.fit(), t('Fit to window')),
+    return h('div.tl-toolbar', b('－', () => this.zoom(0.7), t('Zoom out (-)'), 'zoom-out'), b('＋', () => this.zoom(1.4), t('Zoom in (+)'), 'zoom-in'), b('⤢', () => this.fit(), t('Fit to window'), 'zoom-fit'),
       h('div.sep'), b('＋ ' + t('Voice track'), () => this.addTrack(), t('Add a voice track (another character or take lane)'), 'add-track'),
       b('✂ ' + t('Split'), () => this.splitAtPlayhead(), t('Split the selected clip at the playhead (S)'), 'split-btn'),
       b('🗑', () => this.deleteSelected(), t('Delete selected clip / cue (Del)'), 'del-btn'),
       h('div.sep'), b('⟲ ' + t('Loop'), () => this.loopFromSelection(), t('Loop the selected cue or the dragged range (L)'), 'loop-btn'),
+      h('div.row#marks-bar', { title: t('Marks: ⌘/Ctrl+number sets, ⌥/Option+number jumps (Shift+number also sets)') }),
       h('span.hint', { style: { marginLeft: '.6rem' } }, t('Drag the ruler to scrub · Shift+drag to set a punch/loop range · Ctrl+wheel to zoom')));
   }
   addTrack() { app.store.commit('Add track', (p) => { const tr = newTrack({ name: `${t('Voice')} ${p.tracks.length + 1}`, index: p.tracks.length }); p.tracks.push(tr); app.select({ trackId: tr.id }); }, ['tracks']); }
+  #marksBar() {
+    const bar = this.toolbar.querySelector('#marks-bar'); if (!bar) return; clear(bar);
+    const ms = this.p.markers || []; bar.append(h('span.small.dim', '🚩'));
+    if (!ms.length) bar.append(h('span.small.faint', t('⌘/Ctrl+1…9 set a mark · ⌥/Option+1…9 jump')));
+    for (const m of ms) bar.append(h('button.chip.mark', { dataset: { n: m.n }, title: t('Jump to mark {n} (⌥{n}) — right-click to delete', { n: m.n }), onclick: () => app.emit('jump-mark', m.n), oncontextmenu: (e) => { e.preventDefault(); app.emit('delete-mark', m.n); } }, `${m.n} · ${Math.floor(m.t / 60)}:${(m.t % 60).toFixed(1).padStart(4, '0')}`));
+  }
   rebuild() {
+    this.#marksBar();
     const rows = this.layout(); clear(this.heads);
     const p = this.p; const soloAny = p.original.solo || p.tracks.some((x) => x.solo);
     for (const r of rows) {
@@ -133,7 +141,9 @@ export class Timeline {
     // ruler
     c.fillStyle = '#8c93a3'; c.textAlign = 'left';
     for (let s = Math.ceil(t0 / step) * step; s < t1; s += step) { const x = this.t2x(s); c.fillRect(x, H.ruler - 8, 1, 8); c.fillText(fmtRuler(s, step), x + 4, 12); }
-    for (const m of p.markers || []) { c.fillStyle = '#ffc857'; c.fillRect(this.t2x(m.t), 0, 1, H.ruler); }
+    c.font = 'bold 10px ui-monospace, Menlo, monospace';
+    for (const m of p.markers || []) { const mx = this.t2x(m.t); if (mx < -20 || mx > W + 20) continue; c.fillStyle = 'rgba(255,200,87,.55)'; c.fillRect(mx, 0, 1, this.totalH); c.fillStyle = '#ffc857'; c.fillRect(mx, 0, 16, 13); c.beginPath(); c.moveTo(mx + 16, 0); c.lineTo(mx + 21, 6.5); c.lineTo(mx + 16, 13); c.fill(); c.fillStyle = '#1a1405'; c.textAlign = 'left'; c.fillText(String(m.n), mx + 4, 7); }
+    c.font = '11px ui-monospace, Menlo, monospace';
     // loop / punch region
     const reg = app.sel.region || p.loop;
     if (reg) { const x0 = this.t2x(reg.start), x1 = this.t2x(reg.end); c.fillStyle = 'rgba(255,90,79,.14)'; c.fillRect(x0, 0, x1 - x0, this.totalH); c.fillStyle = 'rgba(255,90,79,.8)'; c.fillRect(x0, 0, x1 - x0, 3); c.fillRect(x0, 0, 2, this.totalH); c.fillRect(x1 - 2, 0, 2, this.totalH); }
@@ -214,7 +224,9 @@ export class Timeline {
       else this.setView(app.view.t0 + (Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY) / app.view.pps, app.view.pps);
     }, { passive: false });
     cv.addEventListener('pointerdown', (e) => {
+      document.activeElement?.blur?.(); // keyboard shortcuts (Delete, Ctrl+Z…) must act on the timeline, not on a text box
       cv.setPointerCapture(e.pointerId); const { x, y } = pos(e); const r = this.#laneAt(y); if (!r) return; const tt = clamp(this.x2t(x), 0, this.dur); const p = this.p; const hit = this.#hit(r, x);
+      if (r.k === 'ruler') { const fm = (p.markers || []).find((m) => x >= this.t2x(m.t) - 1 && x <= this.t2x(m.t) + 22 && y < 14); if (fm) { app.emit('jump-mark', fm.n); return; } }
       if (r.k === 'ruler' || r.k === 'thumbs') { if (e.shiftKey) { this.drag = { type: 'region', a: tt }; app.sel.region = { start: tt, end: tt }; } else { this.drag = { type: 'scrub' }; app.engine.seek(tt); } return; }
       if (e.shiftKey && (r.k === 'track' || r.k === 'orig')) { this.drag = { type: 'region', a: tt }; app.sel.region = { start: tt, end: tt }; if (r.k === 'track') app.select({ trackId: r.id }); return; }
       if (r.k === 'cues') {
@@ -259,7 +271,7 @@ export class Timeline {
       app.store.commit('Add cue', (p) => { p.cues.push(cue); p.cues.sort((a, b) => a.start - b.start); }, ['cues']); app.select({ cueId: cue.id });
       app.emit('focus-cue', cue.id);
     });
-    cv.addEventListener('contextmenu', (e) => { e.preventDefault(); app.sel.region = null; this.invalidate(); app.emit('selection', app.sel); });
+    cv.addEventListener('contextmenu', (e) => { e.preventDefault(); const { x, y } = pos(e); const fm = y < 14 && (this.p.markers || []).find((m) => x >= this.t2x(m.t) - 1 && x <= this.t2x(m.t) + 22); if (fm) { app.emit('delete-mark', fm.n); return; } app.sel.region = null; this.invalidate(); app.emit('selection', app.sel); });
     this.sbar.addEventListener('pointerdown', (e) => {
       const f = (ev) => { const b = this.sbar.getBoundingClientRect(); this.setView(((ev.clientX - b.left) / b.width) * this.dur - (this.width / app.view.pps) / 2, app.view.pps); };
       f(e); const mv = (ev) => f(ev); const upx = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', upx); };

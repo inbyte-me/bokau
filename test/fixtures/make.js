@@ -64,6 +64,8 @@ export function make({ force = false } = {}) {
   video('clip_webm', 'speech_en', { vcodec: 'libvpx', ext: 'webm', dur: 8 });
   video('clip_tall', 'speech_en', { w: 360, h: 640, dur: 6 });
 
+  if (need('clip_mov.mov')) ff('-i', f('clip_en.mp4'), '-t', '6', '-c:v', 'copy', '-c:a', 'aac', '-f', 'mov', f('clip_mov.mov'));
+
   if (!fs.existsSync(f('sample.srt'))) {
     fs.writeFileSync(f('sample.srt'), '1\n00:00:01,000 --> 00:00:02,500\nHello there.\n\n2\n00:00:03,000 --> 00:00:06,000\nJOHN: I would like a cup of coffee, please.\n\n3\n00:00:07,000 --> 00:00:09,500\n<i>Do you have any cheese?</i>\n');
     fs.writeFileSync(f('sample.vtt'), 'WEBVTT\n\n00:01.000 --> 00:02.500\nHello there.\n\n00:00:03.000 --> 00:00:06.000\nI would like a cup of coffee, please.\n');

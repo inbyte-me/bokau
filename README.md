@@ -1,0 +1,86 @@
+# Doblaje Studio — Voice-Over & Parody Studio
+
+A local dubbing / parody / party-game studio for video clips. Import a clip, silence the original actors but keep the music and sound effects, and record your own voice over it — either as a **serious dubbing workstation** (rhythm band, lip-flap markers, ghost guide, syllable-matched translation) or as **party games for the living-room TV** (Bad Lip Reading, Telenovela, Blind Dubbing, Genre Swapper).
+
+Built for a modest setup: a budget mic + USB audio interface, headphones, and a TV. Everything heavy runs on the CPU of the machine it's installed on; AI text features use OpenRouter with a cheap default model and a hard local spend cap.
+
+```
+npm install
+npm start          # → http://localhost:5177   (use Chrome)
+npm run doctor     # checks node, ffmpeg, AI key, and which audio inputs macOS can see
+```
+
+Needs: Node ≥ 22 (`nvm use` picks 24 from `.nvmrc`), `ffmpeg` on the PATH, Chrome (Safari/Firefox lack some Web Audio features).
+Put `OPENROUTER_API_KEY=...` in `.env` (git-ignored) to enable AI. Without it everything works; translation is disabled and party games use an offline silly-line generator.
+
+## The two modes
+
+Choose when creating a project.
+
+### Pro Dub Studio
+| What | How |
+|---|---|
+| Multi-track timeline | video thumbnails, original-audio waveform, cue lane, lip-flap lane, any number of voice tracks; zoom, drag, split, nudge |
+| **Rhythm band** ("bande rythmée") | text scrolls right→left to the red line; each word is as wide as its syllables last; **M/B/P letters (lips closed) are pink**; mouth-open bars underneath |
+| Lip-flap markers | auto from the dialogue, or hold **M** while playing, or draw in the lane |
+| Recording | 3-2-1-BEEP count-in, punch-in over a range, loop-record a cue (one take per pass), take list with "Use" (comping), latency compensation + per-track micro-nudge |
+| Ghost audio guide | original dialogue in one ear at low level (headphones) — never part of the export |
+| Translation assistant | OpenRouter; each line is fitted to the original **syllable count** and to **where the lips close** (M/B/P); one-click apply, one-click undo |
+| Subtitles | import `.srt`/`.vtt`, auto-transcribe on-device (Whisper), export `.srt` / `.json` with timings + character names |
+
+### Parody & Party (TV mode — press **F**)
+Big UI, karaoke lyrics, countdown, "Drama-o-meter". Everyone shares one mic.
+* **Bad Lip Reading** — the AI writes absurd lines that match the syllable count (and, optionally, the *sounds*) of what the mouths say. You read them karaoke-style.
+* **Telenovela Overdrive** — transcribes the scene and rewrites each line as a soap-opera meltdown, with acting directions and a drama score.
+* **Blind Dubbing Challenge** — 4–6 segments; each player improvises over a *silent* segment, seeing only the **last second** of the previous player's performance. Chaotic reveal at the end, every player on their own track with a silly voice effect.
+* **Genre Swapper** — Noir, Pirate, Bad Corporate Speak, 80s Action.
+
+## Voice effects and mixing
+Walkie-talkie (band-pass 300 Hz–3.4 kHz + saturation + squelch bursts), Monster (−5…−12 st + warmth), Helium (+7…+12 st **with formant preservation**), Ghost (big reverb, high-frequency roll-off). Pitch shifting is a phase-vocoder written for this app (`public/js/audio/pitch-core.js`), verified numerically by the tests.
+**Auto-ducking**: the music dips by a set amount (default −12 dB) *just before* you speak and recovers after. **Stem separation** splits the clip into *Dialogue* and *Music + SFX* (see limits below).
+
+## Marks and keyboard
+`⌘/Ctrl + 1…9` sets a mark at the playhead, `⌥/Option + 1…9` jumps to it — and keeps whatever the transport was doing: paused stays paused, playing keeps playing, **recording keeps recording** (the take is split at the jump and each part lands at the right place; recording over earlier material replaces it, the old audio stays in the Takes list). If your browser swallows `⌘+number` (tab switching), `Shift + number` also sets. Press **?** in the studio for the full list.
+
+## Export
+* **Quick share** — MP4 (H.264/AAC) or WebM (VP9/Opus), optional target size (8 / 10 / 16 / 25 MB), loudness normalisation.
+* **Fast export** — if you don't burn subtitles, crop or watermark, the original video stream is **copied untouched** and only the new audio is muxed in (near-instant).
+* **Full render** — burned-in subtitles, text watermark, **9:16 vertical** crop with a focus slider.
+* **Studio archive** — `video_mixed.mp4` + `stem_original_music_sfx.wav` + `stem_user_voice_dry.wav` (raw recordings placed on the timeline) + `stem_user_voice_wet.wav` (with effects) + `.srt` + `.json`.
+
+The mix is rendered **in the browser with the same audio graph used for preview**, so what you hear is what you export; the server only muxes video. Files land in `data/projects/<id>/exports/`.
+
+## Your hardware
+* **Mic + interface (USB):** pick the interface in *Voice → Input device*. Cheap 2-input interfaces often carry the mic on **input 1 only** — choose *Input 1 / Left* in *Interface channel*. Capture is raw (no echo-cancel/noise-suppress/AGC) for clean dry takes.
+* **Run *Mic check*** (2 s quiet + 3 s speech): it reports noise floor, speech level, clipping, SNR and suggests a trim. Set gain on the interface knob first, trim here second. Turn on the track's **Mic fix** (rumble filter + gentle leveling) and use **Denoise this clip** (FFT denoise on the server) for budget mics.
+* **Headphones vs TV speakers:** *Recording setup* → choose which. On TV speakers the mic would hear the film, so the original audio is muted while recording (you still see picture, cues and countdown). With headphones you can hear the original, the music bed or the ghost guide while recording.
+* **Latency:** *Auto-calibrate* plays chirps and listens for them (put headphones next to the mic, or use speakers) to measure the round trip and shift recordings by it. USB interfaces ≈ 15–40 ms, Bluetooth 150–300 ms (avoid for recording). If the TV lags the picture, use *Mix → Picture delay*.
+* **TV:** put the browser on the TV (HDMI), press **F**. A presenter clicker or any keyboard works from the sofa.
+
+## AI cost control
+* Default model `qwen/qwen3.7-flash` (≈ $0.03 / $0.13 per million tokens → a typical call costs ≈ **$0.00004**). Choose others in the AI tab: Qwen3-235B, Ling, Claude Haiku 5.5 (most precise syllables), Gemini Flash Lite. Only a short allow-list of cheap models is accepted.
+* A **local ledger** (`data/ai-ledger.json`) adds up the real cost OpenRouter reports for every call and **refuses further calls at $3.50** (`SPEND_CAP_USD`), below the key's own limit. After that, party games fall back to the offline generator.
+* A short repair pass re-asks only the lines whose syllable count is off.
+* The key never leaves the server; the server only listens on localhost and rejects foreign `Host`/`Origin` headers.
+
+## Honest limits
+* **Stem separation** is signal-processing, not a neural network: for stereo it extracts the *centre* channel in the 150 Hz–7 kHz band (dialogue is usually centred), for **5.1/7.1** it uses the clean centre channel. Busy mixes with centred music leak; **mono clips can't be separated** (the app says so and suggests ducking instead).
+* **Auto lip-flaps** follow the dialogue's loudness, not the actor's face (no computer vision). For silent clips tap them with **M**.
+* **Speech recognition** is Whisper (tiny/base/small, quantised ONNX) in the browser: `base` is the default (~1× real time on this i7). Recordings made far from the mic are transcribed poorly — the Mic check tells you when that is the case. Models download once into `models/`.
+* `onnxruntime-node` has no Intel-Mac build, so everything ML runs in WASM in the browser.
+* The syllable counter is heuristic (EN/ES/FR).
+
+## Layout
+```
+server/        Node HTTP server: ingest (ffmpeg), stems, speech segments, mic clean-up, AI proxy + ledger, export mux
+shared/        project model, SRT/VTT, syllables/lip-closure, transcript→cue logic (used by server AND browser)
+public/js/
+  audio/       engine (transport/sync), mixgraph (the one mix), fx, pitch-core (phase vocoder), duck, mic, session (recording), calibrate, render
+  ui/          studio, timeline, rhythm band, karaoke, panels/, party/
+  stt/         Whisper worker
+data/          projects (git-ignored)      models/   cached speech models (git-ignored)
+test/          unit · api · e2e (headless Chrome)  ·  npm test / npm run test:e2e / npm run test:live
+```
+
+## Tests
+`npm test` (unit + API, ffmpeg-based), `npm run test:e2e` (headless Chrome: offline-render audio analysis, recording, punch/loop, marks, export, party games, Spanish UI), `npm run test:live` (real microphone, needs a person talking nearby).

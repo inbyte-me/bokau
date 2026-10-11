@@ -11,7 +11,7 @@ test.after(async () => { await browser?.close(); await app?.close(); });
 async function openParty(fixture = 'clip_en.mp4') {
   const r = await app.api('POST', '/api/projects/from-path', { path: fx(fixture), mode: 'party' }); await app.waitJob(r.data.job); const id = r.data.project.id;
   const page = await browser.newPage(); page.on('console', (m) => logs.push(m.text())); page.on('pageerror', (e) => logs.push('PAGEERROR ' + e.message));
-  await injectFakeMic(page, fx('mic_speech.wav')); await page.goto(app.base + `/#/p/${id}`, { waitUntil: 'domcontentloaded' });
+  await page.evaluateOnNewDocument(() => localStorage.setItem('lang', 'en')); await injectFakeMic(page, fx('mic_speech.wav')); await page.goto(app.base + `/#/p/${id}`, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('#mode-badlip', { timeout: 30000 });
   await page.evaluate(() => window.__app.store.commit('fast', (p) => { p.settings.preRoll = 1; }, ['settings']));
   const until = async (fn, ms = 20000, label = '') => { const t0 = Date.now(); for (;;) { if (await page.evaluate(fn)) return; if (Date.now() - t0 > ms) throw new Error('timeout ' + label); await wait(100); } };
