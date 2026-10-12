@@ -1,0 +1,20 @@
+packages:
+  - apps/*
+  - packages/*
+  - e2e
+
+# Install scripts are blocked unless listed here (supply-chain hygiene).
+allowBuilds:
+  electron: true
+  esbuild: true
+  # transformers.js pulls these in for Node; we only run models in the browser (WASM).
+  onnxruntime-node: false
+  protobufjs: false
+  electron-winstaller: false
+
+# Versions shared by several workspace packages, kept in one place.
+catalog:
+  "@huggingface/transformers": 4.3.1
+  "@types/node": ^24.9.0
+  drizzle-orm: 1.0.0-rc.4
+  typescript: 7.0.2

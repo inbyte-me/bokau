@@ -1,0 +1,26 @@
+# Packaging for macOS / Windows / Linux. `pnpm desktop:dist` builds the web app, bundles the shell, then packages.
+appId: studio.doblaje.desktop
+productName: Doblaje Studio
+directories:
+  output: release
+files:
+  - dist/**
+  - package.json
+extraResources:
+  - from: ../web/dist
+    to: web
+  - from: dist/drizzle
+    to: drizzle
+asarUnpack:
+  - node_modules/@napi-rs/**
+mac:
+  category: public.app-category.video
+  target: [dmg]
+  extendInfo:
+    NSMicrophoneUsageDescription: Doblaje Studio records your voice for dubbing and podcasts.
+    NSCameraUsageDescription: Doblaje Studio records video for podcasts.
+win:
+  target: [nsis]
+linux:
+  target: [AppImage]
+  category: AudioVideo

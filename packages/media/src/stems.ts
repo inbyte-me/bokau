@@ -1,0 +1,216 @@
+import { spawn } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { AppError, type Progress, type ProjectRepository, type Stems, type StereoSpread, type TimeRange } from '@doblaje/core';
+import type { MediaConfig } from './config.ts';
+import { exec, maxVolumeDb, parseSilence, runFfmpeg } from './ffmpeg.ts';
+
+const SURROUND: Record<string, string[]> = {
+  '5.1': ['FL', 'FR', 'FC', 'LFE', 'BL', 'BR'],
+  '5.1(side)': ['FL', 'FR', 'FC', 'LFE', 'SL', 'SR'],
+  '7.1': ['FL', 'FR', 'FC', 'LFE', 'BL', 'BR', 'SL', 'SR'],
+};
+const noop: Progress = () => {};
+
+const meanVolume = async (cfg: MediaConfig, file: string, expr: string) => {
+  const { stderr } = await exec(cfg.ffmpeg, ['-hide_banner', '-nostdin', '-i', file, '-af', `pan=mono|c0=${expr},volumedetect`, '-f', 'null', '-']);
+  const m = /mean_volume: (-?[\d.]+|-inf) dB/.exec(stderr);
+  return m && m[1] !== '-inf' ? Number(m[1]) : -120;
+};
+
+/** How far apart are L and R? relDb is side relative to mid (very negative => effectively mono). */
+export async function stereoSpread(cfg: MediaConfig, wav: string): Promise<StereoSpread> {
+  const mid = await meanVolume(cfg, wav, '0.5*c0+0.5*c1');
+  const side = await meanVolume(cfg, wav, '0.5*c0-0.5*c1');
+  return { midDb: mid, sideDb: side, relDb: side - mid };
+}
+
+export const neuralPython = (cfg: MediaConfig) => path.join(cfg.toolsDir, 'venv', 'bin', 'python');
+export function neuralAvailable(cfg: MediaConfig): boolean {
+  const lib = path.join(cfg.toolsDir, 'venv', 'lib');
+  try {
+    return fs.existsSync(neuralPython(cfg)) && fs.readdirSync(lib).some((d) => fs.existsSync(path.join(lib, d, 'site-packages', 'demucs')));
+  } catch {
+    return false;
+  }
+}
+
+/** Neural separation with Demucs (htdemucs, vocals vs everything else). Works on mono mixes, where phase tricks cannot. */
+async function separateNeural(cfg: MediaConfig, dir: string, set: Progress): Promise<void> {
+  const work = path.join(dir, '.demucs');
+  fs.rmSync(work, { recursive: true, force: true });
+  fs.mkdirSync(work, { recursive: true });
+  const input = path.join(work, 'in.wav');
+  set(0.03, 'preparing');
+  await runFfmpeg(cfg, ['-i', path.join(dir, 'audio_orig.wav'), '-ar', '44100', '-ac', '2', '-c:a', 'pcm_s16le', input]);
+  await new Promise<void>((resolve, reject) => {
+    const env = {
+      ...process.env,
+      TORCH_HOME: path.join(cfg.toolsDir, 'torch'),
+      PYTHONUNBUFFERED: '1',
+      OMP_NUM_THREADS: String(Math.max(2, (os.cpus().length || 4) - 1)),
+    };
+    const p = spawn(
+      neuralPython(cfg),
+      ['-m', 'demucs', '-n', 'htdemucs', '--two-stems', 'vocals', '-d', 'cpu', '--shifts', '0', '-o', path.join(work, 'out'), input],
+      {
+        env,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      },
+    );
+    let tail = '';
+    p.stderr.on('data', (d: Buffer) => {
+      const t = d.toString();
+      tail = (tail + t).slice(-2000);
+      const m = [...t.matchAll(/(\d+)%\|/g)].pop();
+      if (m) set(0.05 + (Number(m[1]) / 100) * 0.85, 'neural separation');
+    });
+    p.stdout.resume();
+    p.on('error', (e) => reject(new Error(`could not start demucs: ${e.message}`)));
+    p.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`demucs failed: ${tail.split('\n').slice(-4).join(' ')}`))));
+  });
+  const outDir = path.join(work, 'out', 'htdemucs', 'in');
+  set(0.92, 'writing stems');
+  await runFfmpeg(cfg, ['-i', path.join(outDir, 'vocals.wav'), '-ar', '48000', '-ac', '2', '-c:a', 'pcm_s16le', path.join(dir, 'stem_dialogue.wav')]);
+  await runFfmpeg(cfg, ['-i', path.join(outDir, 'no_vocals.wav'), '-ar', '48000', '-ac', '2', '-c:a', 'pcm_s16le', path.join(dir, 'stem_bg.wav')]);
+  fs.rmSync(work, { recursive: true, force: true });
+}
+
+export type StemRequest = 'auto' | 'fast' | 'neural';
+
+/**
+ * Split the original audio into Dialogue and Background (music + SFX).
+ *  - neural (on request): Demucs, works on anything including mono.
+ *  - 5.1/7.1 sources: dialogue is the centre channel, background is everything else (exact, clean).
+ *  - stereo sources: band-limited centre-channel extraction (150 Hz..7 kHz); dialogue + background == original.
+ *  - (near-)mono sources can't be separated by phase -> status 'unsupported' (the UI then offers neural).
+ */
+export async function separateStems(
+  cfg: MediaConfig,
+  projects: ProjectRepository,
+  id: string,
+  { method: requested = 'auto' }: { method?: StemRequest } = {},
+  set: Progress = noop,
+): Promise<Stems> {
+  const dir = projects.dir(id);
+  const p = projects.get(id);
+  if (!p.media?.hasAudio) throw new AppError(400, 'This clip has no audio to separate');
+  const orig = path.join(dir, 'audio_orig.wav');
+  const dlg = path.join(dir, 'stem_dialogue.wav');
+  const bg = path.join(dir, 'stem_bg.wav');
+  const dur = p.media.duration;
+  const layout = p.media.channelLayout || '';
+  const src = path.join(dir, p.media.sourceFile || 'source');
+  const finish = (stems: Stems) => {
+    const upd = projects.get(id);
+    upd.stems = stems;
+    projects.save(upd);
+    return stems;
+  };
+
+  if (requested === 'neural') {
+    if (!neuralAvailable(cfg)) throw new AppError(409, 'The neural separator is not installed. Run: pnpm setup:separation', 'NEURAL_MISSING');
+    await separateNeural(cfg, dir, set);
+    return finish({ status: 'ready', method: 'neural-demucs', spread: null, createdAt: new Date().toISOString() });
+  }
+  if (SURROUND[layout] && fs.existsSync(src)) {
+    const ch = SURROUND[layout];
+    const side = (names: string[]) => names.filter((n) => ch.includes(n));
+    const L = ['FL', ...side(['BL', 'SL']).map((n) => `0.7*${n}`), ...side(['LFE']).map((n) => `0.5*${n}`)].join('+');
+    const R = ['FR', ...side(['BR', 'SR']).map((n) => `0.7*${n}`), ...side(['LFE']).map((n) => `0.5*${n}`)].join('+');
+    set(0.1, 'dialogue');
+    await runFfmpeg(cfg, ['-i', src, '-map', '0:a:0', '-af', 'pan=stereo|c0=FC|c1=FC,aresample=48000', '-c:a', 'pcm_s16le', dlg], {
+      durationSec: dur,
+      onProgress: (f) => set(0.1 + f * 0.4, 'dialogue'),
+    });
+    set(0.5, 'background');
+    await runFfmpeg(cfg, ['-i', src, '-map', '0:a:0', '-af', `pan=stereo|c0=${L}|c1=${R},aresample=48000`, '-c:a', 'pcm_s16le', bg], {
+      durationSec: dur,
+      onProgress: (f) => set(0.5 + f * 0.5, 'background'),
+    });
+    return finish({ status: 'ready', method: 'surround-center', spread: null, createdAt: new Date().toISOString() });
+  }
+  const spread = await stereoSpread(cfg, orig);
+  if (p.media.channels < 2 || spread.relDb < -35)
+    return finish({ status: 'unsupported', method: null, reason: 'mono', spread, neuralAvailable: neuralAvailable(cfg) });
+  // One shared crossover => dialogue + background sum back to the original (up to an all-pass phase shift).
+  // Mid band: the centre part (L+R)/2 is dialogue, the remainder (side) stays in the background.
+  const k = 0.47; // centre removal strength 0.94 keeps a little ambience in the bg
+  set(0.1, 'separating');
+  await runFfmpeg(
+    cfg,
+    [
+      '-i',
+      orig,
+      '-filter_complex',
+      `[0:a]acrossover=split=150 7000:order=4th[lo][mid][hi];[mid]asplit=2[m1][m2];` +
+        `[m1]pan=stereo|c0=${k}*c0+${k}*c1|c1=${k}*c0+${k}*c1[d];` +
+        `[m2]pan=stereo|c0=${1 - k}*c0-${k}*c1|c1=${1 - k}*c1-${k}*c0[ms];` +
+        '[lo][ms][hi]amix=inputs=3:normalize=0[b]',
+      '-map',
+      '[d]',
+      '-c:a',
+      'pcm_s16le',
+      dlg,
+      '-map',
+      '[b]',
+      '-c:a',
+      'pcm_s16le',
+      bg,
+    ],
+    { durationSec: dur, onProgress: (f) => set(0.1 + f * 0.9, 'separating') },
+  );
+  return finish({ status: 'ready', method: 'stereo-center-cut', spread, createdAt: new Date().toISOString() });
+}
+
+export interface SpeechOptions {
+  noiseDb?: number | null;
+  minSilence?: number;
+  minSpeech?: number;
+  mergeGap?: number;
+}
+
+/** Detect speech-like segments from the dialogue stem (or the STT audio). */
+export async function detectSpeech(
+  cfg: MediaConfig,
+  projects: ProjectRepository,
+  id: string,
+  { noiseDb = null, minSilence = 0.3, minSpeech = 0.25, mergeGap = 0.25 }: SpeechOptions = {},
+): Promise<TimeRange[]> {
+  const dir = projects.dir(id);
+  const p = projects.get(id);
+  if (!p.media?.hasAudio) return [];
+  const file = path.join(dir, fs.existsSync(path.join(dir, 'stem_dialogue.wav')) ? 'stem_dialogue.wav' : 'audio_16k.wav');
+  // adaptive threshold: 28 dB below the loudest peak, clamped (works for quiet budget-mic sources too)
+  const threshold = noiseDb ?? Math.max(-55, Math.min(-25, (await maxVolumeDb(cfg, file, -6)) - 28));
+  const { stderr } = await exec(cfg.ffmpeg, [
+    '-hide_banner',
+    '-nostdin',
+    '-i',
+    file,
+    '-af',
+    `silencedetect=noise=${threshold}dB:d=${minSilence}`,
+    '-f',
+    'null',
+    '-',
+  ]);
+  const merged: [number, number][] = [];
+  for (const s of parseSilence(stderr, p.media.duration)) {
+    const last = merged[merged.length - 1];
+    if (last && s[0] - last[1] < mergeGap) last[1] = s[1];
+    else merged.push([...s]);
+  }
+  return merged.filter(([a, b]) => b - a >= minSpeech).map(([start, end]) => ({ start: Math.round(start * 1000) / 1000, end: Math.round(end * 1000) / 1000 }));
+}
+
+/** Mic clean-up for budget mics: rumble filter, FFT denoise, gentle compression, peak-normalize to -3 dBFS. */
+export async function cleanTake(cfg: MediaConfig, inFile: string, outFile: string): Promise<{ gainDb: number }> {
+  const chain = 'highpass=f=85,afftdn=nr=14:nf=-38:tn=1,acompressor=threshold=-22dB:ratio=3:attack=5:release=90:makeup=3';
+  const tmp = `${outFile}.tmp.wav`;
+  await runFfmpeg(cfg, ['-i', inFile, '-af', chain, '-c:a', 'pcm_s16le', tmp]);
+  const gain = Math.max(-6, Math.min(24, -3 - (await maxVolumeDb(cfg, tmp, -3))));
+  await runFfmpeg(cfg, ['-i', tmp, '-af', `volume=${gain.toFixed(2)}dB`, '-c:a', 'pcm_s16le', outFile]);
+  fs.rmSync(tmp, { force: true });
+  return { gainDb: gain };
+}

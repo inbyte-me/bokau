@@ -1,13 +1,25 @@
+# dependencies and build output
 node_modules/
+dist/
+apps/desktop/release/
+*.tsbuildinfo
+
+# local data, caches, downloaded models and tools (never committed)
 data/
 models/
-*.log
-.DS_Store
-test/.tmp/
+tools/
+.cache/
+
+# secrets
 .env
 .env.*
-tools/
+!.env.example
+
+# media dropped in the repo root for manual testing
 /*.mp4
 /*.mov
 /*.mkv
 /*.webm
+
+*.log
+.DS_Store

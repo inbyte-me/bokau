@@ -1,0 +1,17 @@
+{
+  "name": "@doblaje/ai",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@doblaje/core": "workspace:*",
+    "@doblaje/db": "workspace:*"
+  }
+}

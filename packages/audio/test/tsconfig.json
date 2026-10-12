@@ -1,0 +1,7 @@
+{
+  "extends": ["../../../tsconfig.web.json", "../../../tsconfig.test.json"],
+  "include": [".", "../src"],
+  "compilerOptions": {
+    "types": ["node"]
+  }
+}

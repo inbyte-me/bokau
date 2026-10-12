@@ -1,0 +1,18 @@
+{
+  "name": "@doblaje/server",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "HTTP server shell: loads config, opens the database, serves the web build and the API on localhost.",
+  "bin": {
+    "doblaje-server": "./src/main.ts"
+  },
+  "scripts": {
+    "start": "node src/main.ts",
+    "dev": "node --watch-path=src --watch-path=../../packages src/main.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@doblaje/api": "workspace:*"
+  }
+}

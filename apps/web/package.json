@@ -1,0 +1,22 @@
+{
+  "name": "@doblaje/web",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Frontend shell: router, app state and feature screens, built with Vite.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.json && tsc -p test/tsconfig.json"
+  },
+  "dependencies": {
+    "@doblaje/audio": "workspace:*",
+    "@doblaje/core": "workspace:*",
+    "@doblaje/speech": "workspace:*",
+    "@doblaje/ui": "workspace:*"
+  },
+  "devDependencies": {
+    "vite": "8.3.4"
+  }
+}

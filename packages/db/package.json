@@ -1,0 +1,26 @@
+{
+  "name": "@doblaje/db",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json && tsc -p test/tsconfig.json",
+    "generate": "drizzle-kit generate",
+    "check": "drizzle-kit check"
+  },
+  "dependencies": {
+    "@doblaje/core": "workspace:*",
+    "drizzle-orm": "catalog:"
+  },
+  "devDependencies": {
+    "drizzle-kit": "1.0.0-rc.4"
+  },
+  "files": [
+    "src",
+    "drizzle"
+  ]
+}

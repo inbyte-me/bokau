@@ -1,0 +1,9 @@
+{
+  "extends": ["../tsconfig.node.json", "../tsconfig.test.json"],
+  "compilerOptions": {
+    "lib": ["es2024", "dom", "dom.iterable"],
+    "strictNullChecks": false
+  },
+  "include": ["."],
+  "//": "Browser-driving scripts: page.evaluate() code works on live DOM that the test itself asserts on, so null checks are relaxed here only."
+}

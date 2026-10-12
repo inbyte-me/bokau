@@ -5,19 +5,30 @@ A local dubbing / parody / party-game studio for video clips. Import a clip, sil
 Built for a modest setup: a budget mic + USB audio interface, headphones, and a TV. Everything heavy runs on the CPU of the machine it's installed on; AI text features use OpenRouter with a cheap default model and a hard local spend cap.
 
 ```
-npm install
-npm start          # → http://localhost:5177   (use Chrome)
-npm run doctor     # checks node, ffmpeg, AI key, and which audio inputs macOS can see
+corepack enable pnpm   # once
+pnpm install
+pnpm start             # builds the web app and serves it → http://localhost:5177   (use Chrome)
+pnpm desktop           # or: the same app as a desktop window (Electron)
+pnpm doctor            # checks Node, ffmpeg, AI key, and which audio inputs macOS can see
 ```
 
-Needs: Node ≥ 22 (`nvm use` picks 24 from `.nvmrc`), `ffmpeg` on the PATH, Chrome (Safari/Firefox lack some Web Audio features).
-Put `OPENROUTER_API_KEY=...` in `.env` (git-ignored) to enable AI. Without it everything works; translation is disabled and party games use an offline silly-line generator.
+Needs: Node 24.11+ (`nvm use` reads `.nvmrc`), `ffmpeg` on the PATH, Chrome for the browser version (Safari/Firefox lack some Web Audio features; the desktop app brings its own Chromium).
+Copy `.env.example` to `.env` (git-ignored) and set `OPENROUTER_API_KEY` to enable AI. Without it everything works; translation is disabled and party games use an offline silly-line generator.
+
+Developing: see [AGENTS.md](AGENTS.md) and [docs/](docs/README.md). `pnpm dev` runs the API and Vite with hot reload.
+
+## Clip library and party karaoke
+Add videos to the **clip library** and prepare them once: separate the dialogue, generate subtitles, find the characters and fix who says what. A clip is never recorded on; from it you start as many **dubbing**, **party** or **podcast** projects as you like (media is shared on disk, the prepared work is copied).
+At a party, **Party: pick a clip** shows the library on the TV: pick a scene, pick the character(s) you play, and those voices go silent while the rest of the scene plays and your lines light up karaoke-style. Record, watch the reveal, *Next player*.
 
 ## The three modes
 
 Choose when creating a project.
 
 ### Pro Dub Studio
+Import a clip and keep *Prepare automatically* on: the dialogue is separated from the music, subtitles are generated
+and every speaker gets their own lane. Then pick your devices from the chip in the top bar and record.
+
 | What | How |
 |---|---|
 | Multi-track timeline | video thumbnails, original-audio waveform, cue lane, lip-flap lane, any number of voice tracks; zoom, drag, split, nudge |
@@ -39,14 +50,14 @@ Big UI, karaoke lyrics, countdown, "Drama-o-meter". Everyone shares one mic.
 * **Genre Swapper** — Noir, Pirate, Bad Corporate Speak, 80s Action.
 
 ## Voices: dub one character by silencing it
-*Mix → Voices → Identify voices* finds the distinct speakers on the separated dialogue track (a speaker-embedding model running in the browser), shows who speaks when in a **Voices** lane, and gives each character an **On / Off / Solo**. Turn **Character A** off and the original plays without that voice (the music, effects and the other characters stay) while you record your own over it. Rename a character and the cue labels follow. If the automatic count is wrong, pick the number of voices; click a block in the lane to reassign a passage. Muting is by speech turn: where two characters talk at the same moment, the passage belongs to one of them.
+*Voices → Prepare all* (or *Identify voices*) finds the distinct speakers on the separated dialogue track (a speaker-embedding model running in the browser), gives each speaker **their own lane** in the timeline, and gives each character an **On / Off / Solo**. Turn **Character A** off and the original plays without that voice (the music, effects and the other characters stay) while you record your own over it. Rename a character and the cue labels follow. If the automatic count is wrong, pick the number of voices; to fix who says what, split a passage at any point (right-click → *Split passage here*, or select it and press **S** at the playhead) and right-click each piece to give it to the right character; subtitle cues split the same way. Muting is by speech turn: where two characters talk at the same moment, the passage belongs to one of them.
 
 ## Stem separation
 * **Fast** (instant): 5.1/7.1 uses the clean centre channel; stereo uses centre-channel extraction.
-* **Best quality (neural)**: Demucs `htdemucs` on the CPU, about as long as the clip (a 2-minute clip ≈ 2 minutes on an Intel i7). This is the one that works on **mono** mixes such as most cartoons. One-time install into `./tools`: `npm run setup:separation` (~1 GB, nothing outside the folder is touched).
+* **Best quality (neural)**: Demucs `htdemucs` on the CPU, about as long as the clip (a 2-minute clip ≈ 2 minutes on an Intel i7). This is the one that works on **mono** mixes such as most cartoons. One-time install into `./tools`: `pnpm setup:separation` (~1 GB, nothing outside the folder is touched).
 
 ## Voice effects and mixing
-Walkie-talkie (band-pass 300 Hz–3.4 kHz + saturation + squelch bursts), Monster (−5…−12 st + warmth), Helium (+7…+12 st **with formant preservation**), Ghost (big reverb, high-frequency roll-off). Pitch shifting is a phase-vocoder written for this app (`public/js/audio/pitch-core.js`), verified numerically by the tests.
+Walkie-talkie (band-pass 300 Hz–3.4 kHz + saturation + squelch bursts), Monster (−5…−12 st + warmth), Helium (+7…+12 st **with formant preservation**), Ghost (big reverb, high-frequency roll-off). Pitch shifting is a phase-vocoder written for this app (`packages/audio/src/pitch-core.ts`), verified numerically by the tests.
 **Auto-ducking**: the music dips by a set amount (default −12 dB) *just before* you speak and recovers after. **Stem separation** splits the clip into *Dialogue* and *Music + SFX* (see limits below).
 
 ## Marks and keyboard
@@ -58,7 +69,7 @@ Walkie-talkie (band-pass 300 Hz–3.4 kHz + saturation + squelch bursts), Monste
 * **Full render** — burned-in subtitles, text watermark, **9:16 vertical** crop with a focus slider.
 * **Studio archive** — `video_mixed.mp4` + `stem_original_music_sfx.wav` + `stem_user_voice_dry.wav` (raw recordings placed on the timeline) + `stem_user_voice_wet.wav` (with effects) + `.srt` + `.json`.
 
-The mix is rendered **in the browser with the same audio graph used for preview**, so what you hear is what you export; the server only muxes video. Files land in `data/projects/<id>/exports/`.
+The mix is rendered **in the browser with the same audio graph used for preview**, so what you hear is what you export; the server only muxes video. Files land in `data/projects/<id>/exports/` (desktop: the app's user-data folder).
 
 ## Your hardware
 * **Mic + interface (USB):** pick the interface in *Voice → Input device*. Cheap 2-input interfaces often carry the mic on **input 1 only** — choose *Input 1 / Left* in *Interface channel*. Capture is raw (no echo-cancel/noise-suppress/AGC) for clean dry takes.
@@ -69,12 +80,12 @@ The mix is rendered **in the browser with the same audio graph used for preview*
 
 ## AI cost control
 * Default model `qwen/qwen3.7-flash` (≈ $0.03 / $0.13 per million tokens → a typical call costs ≈ **$0.00004**). Choose others in the AI tab: Qwen3-235B, Ling, Claude Haiku 5.5 (most precise syllables), Gemini Flash Lite. Only a short allow-list of cheap models is accepted.
-* A **local ledger** (`data/ai-ledger.json`) adds up the real cost OpenRouter reports for every call and **refuses further calls at $3.50** (`SPEND_CAP_USD`), below the key's own limit. After that, party games fall back to the offline generator.
+* A **local ledger** (the `ai_calls` table in `data/doblaje.db`) adds up the real cost OpenRouter reports for every call and **refuses further calls at $3.50** (`SPEND_CAP_USD`), below the key's own limit. After that, party games fall back to the offline generator.
 * A short repair pass re-asks only the lines whose syllable count is off.
 * The key never leaves the server; the server only listens on localhost and rejects foreign `Host`/`Origin` headers.
 
 ## Honest limits
-* **Fast stem separation** is signal processing, not a neural network, so busy stereo mixes with centred music leak and **mono clips can't be split that way**: use *Best quality (neural)* (needs `npm run setup:separation`).
+* **Fast stem separation** is signal processing, not a neural network, so busy stereo mixes with centred music leak and **mono clips can't be split that way**: use *Best quality (neural)* (needs `pnpm setup:separation`).
 * **Voice identification** separates *turns*, not overlapping voices: when two characters talk at once the passage is assigned to one of them. It works best on clean dialogue and may merge two similar voices (children, say); use the *number of voices* selector to correct it.
 * **Auto lip-flaps** follow the dialogue's loudness, not the actor's face (no computer vision). For silent clips tap them with **M**.
 * **Speech recognition** is Whisper (tiny/base/small, quantised ONNX) in the browser: `base` is the default (~1× real time on this i7). Recordings made far from the mic are transcribed poorly — the Mic check tells you when that is the case. Models download once into `models/`.
@@ -83,15 +94,13 @@ The mix is rendered **in the browser with the same audio graph used for preview*
 
 ## Layout
 ```
-server/        Node HTTP server: ingest (ffmpeg), stems, speech segments, mic clean-up, AI proxy + ledger, export mux
-shared/        project model, SRT/VTT, syllables/lip-closure, transcript→cue logic (used by server AND browser)
-public/js/
-  audio/       engine (transport/sync), mixgraph (the one mix), fx, pitch-core (phase vocoder), duck, mic, session (recording), calibrate, render
-  ui/          studio, timeline, rhythm band, karaoke, panels/, party/
-  stt/         Whisper worker
-data/          projects (git-ignored)      models/   cached speech models (git-ignored)
-test/          unit · api · e2e (headless Chrome)  ·  npm test / npm run test:e2e / npm run test:live
+apps/      server (HTTP shell) · web (Vite frontend shell) · desktop (Electron shell)
+packages/  core (shared domain) · db (SQLite + Drizzle) · media (ffmpeg) · ai (OpenRouter) · api (HTTP app)
+           audio (Web Audio engine) · speech (Whisper, voice id) · ui (DOM helper, icons, i18n) · testkit
+e2e/       browser tests      docs/   architecture, data, API, audio engine, ADRs
+data/      projects + doblaje.db (git-ignored)      models/   cached speech models (git-ignored)
 ```
+Details: [docs/architecture.md](docs/architecture.md).
 
 ## Tests
-`npm test` (unit + API, ffmpeg-based), `npm run test:e2e` (headless Chrome: offline-render audio analysis, recording, punch/loop, marks, export, party games, Spanish UI), `npm run test:live` (real microphone, needs a person talking nearby).
+`pnpm test` (unit + API, ffmpeg-based), `pnpm test:e2e` (headless, muted Chrome with a synthetic microphone: offline-render audio analysis, recording, punch/loop, marks, export, party games, podcast, Spanish UI, desktop shell), `pnpm test:live` (real microphone, needs a person talking nearby). See [docs/testing.md](docs/testing.md).

@@ -1,0 +1,19 @@
+{
+  "name": "@doblaje/testkit",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Test helpers: generated fixtures, a throw-away backend, and a silent headless Chrome with a fake microphone.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@doblaje/api": "workspace:*",
+    "@doblaje/core": "workspace:*",
+    "puppeteer-core": "^25.13.0"
+  }
+}

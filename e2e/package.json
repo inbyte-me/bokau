@@ -1,0 +1,14 @@
+{
+  "name": "@doblaje/e2e",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "End-to-end tests: real backend + built web app in headless Chrome, silent, with a synthetic microphone.",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@doblaje/testkit": "workspace:*",
+    "puppeteer-core": "^25.13.0"
+  }
+}

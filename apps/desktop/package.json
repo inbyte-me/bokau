@@ -1,0 +1,25 @@
+{
+  "name": "@doblaje/desktop",
+  "productName": "Doblaje Studio",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Native shell: Electron window around the same API and web build, data kept in the OS user-data folder.",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "node build.ts",
+    "start": "node build.ts && electron .",
+    "dist": "node build.ts && electron-builder --config electron-builder.yml",
+    "typecheck": "tsc -p tsconfig.json",
+    "pack": "node build.ts && electron-builder --config electron-builder.yml --dir"
+  },
+  "dependencies": {
+    "@doblaje/api": "workspace:*",
+    "@napi-rs/canvas": "^1.0.11"
+  },
+  "devDependencies": {
+    "electron": "44.1.0",
+    "electron-builder": "26.15.3",
+    "esbuild": "0.28.2"
+  }
+}

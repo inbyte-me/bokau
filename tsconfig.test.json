@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "//": "Tests are type-checked too, but may leave fixture-heavy locals untyped. Application code stays fully strict.",
+  "compilerOptions": {
+    "noImplicitAny": false,
+    "useUnknownInCatchVariables": false
+  }
+}

@@ -1,30 +1,39 @@
 {
   "name": "doblaje-studio",
-  "version": "0.1.0",
-  "description": "Voice-Over & Parody Studio \u2014 local dubbing, parody and party-game studio for video clips",
-  "type": "module",
+  "version": "0.2.0",
   "private": true,
-  "scripts": {
-    "start": "node server/index.js",
-    "dev": "node --watch server/index.js",
-    "fixtures": "node test/fixtures/make.js",
-    "test": "node --test \"test/unit/*.test.js\" \"test/api/*.test.js\"",
-    "test:e2e": "node --test --test-concurrency=1 \"test/e2e/*.test.js\"",
-    "doctor": "node scripts/doctor.mjs",
-    "test:live": "LIVE_MIC=1 node --test test/e2e/live-mic.test.js",
-    "watch:interface": "node scripts/watch-interface.mjs",
-    "setup:separation": "bash scripts/setup-separation.sh",
-    "watch:hardware": "node scripts/watch-hardware.mjs",
-    "test:live-output": "LIVE_MIC=1 node --test test/e2e/live-output.test.js"
-  },
+  "description": "Voice-Over & Parody Studio: local dubbing, podcast and party-game studio for video clips",
+  "type": "module",
+  "packageManager": "pnpm@11.23.0",
   "engines": {
-    "node": ">=22"
+    "node": ">=24.11"
   },
-  "dependencies": {
-    "@huggingface/transformers": "^4.3.1",
-    "@napi-rs/canvas": "^1.0.11"
+  "scripts": {
+    "dev": "node scripts/dev.ts",
+    "build": "pnpm --filter @doblaje/web build",
+    "start": "pnpm build && node apps/server/src/main.ts",
+    "serve": "node apps/server/src/main.ts",
+    "desktop": "pnpm build && pnpm --filter @doblaje/desktop start",
+    "desktop:dist": "pnpm build && pnpm --filter @doblaje/desktop dist",
+    "typecheck": "pnpm -r --parallel typecheck && tsc -p scripts",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "test": "node --test \"packages/*/test/*.test.ts\" \"apps/*/test/*.test.ts\"",
+    "test:e2e": "pnpm build && node --test --test-concurrency=1 \"e2e/*.test.ts\"",
+    "test:all": "pnpm typecheck && pnpm lint && pnpm test && pnpm test:e2e",
+    "test:live": "LIVE_MIC=1 node --test e2e/live-mic.test.ts",
+    "test:live-output": "LIVE_MIC=1 node --test e2e/live-output.test.ts",
+    "db:generate": "pnpm --filter @doblaje/db generate",
+    "db:check": "pnpm --filter @doblaje/db check",
+    "fixtures": "node packages/testkit/src/make-fixtures.ts",
+    "doctor": "node scripts/doctor.ts",
+    "setup:separation": "bash scripts/setup-separation.sh",
+    "watch:hardware": "node scripts/watch-hardware.ts"
   },
   "devDependencies": {
-    "puppeteer-core": "*"
+    "@biomejs/biome": "2.5.15",
+    "@doblaje/testkit": "workspace:*",
+    "@types/node": "^24.9.0",
+    "typescript": "7.0.2"
   }
 }
