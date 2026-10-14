@@ -60,10 +60,8 @@ certificate and key you obtained, e.g. from Let's Encrypt).
 | `DOBLAJE_MODE` | `studio` | `party` for a server of rooms only |
 | `PORT`, `HOST` | `5177`, `0.0.0.0` (party) | where it listens |
 | `PARTY_URL` | – | the public address; invite links use it |
-| `PARTY_JOIN_URL` | – | invite link template for a phone app served elsewhere, e.g. `https://play.example.com/?room={code}` |
 | `TRUST_PROXY` | `0` (compose: `2`) | proxies in front; their `X-Forwarded-For` is believed this many hops (limits are per address) |
 | `TLS_CERT`, `TLS_KEY` | – | serve HTTPS directly |
-| `PARTY_ORIGINS` | – | other origins allowed to use the API and sockets (a phone app on a CDN), comma separated |
 | `PARTY_MAX_ROOMS` | `20` | rooms open at once |
 | `PARTY_CREATES_PER_HOUR` | `12` | rooms one address may open per hour |
 | `PARTY_EMPTY_ROOM_MINUTES` | `5` | after the last person leaves, the room and its media are deleted |
@@ -100,22 +98,34 @@ people save what they want while they are still in the room. `PARTY_RETENTION_HO
 crash). Disk use is roughly the clip plus the takes per open round; budget for `PARTY_MAX_ROOMS` rooms.
 
 ## Clips
-Preparing a clip (separating voices, subtitles, characters) uses the studio app, so do it on your own computer: run the
-studio, build the library, then copy the data folder (`doblaje.db` and `projects/`) to the server's data volume. The
-host picks from that library (clips that are ready and have characters that speak). Replace the folder (or add clips)
-while the server is stopped.
+Preparing a clip (separating voices, subtitles, characters) uses the studio app, so do it on your own computer. A clip then
+travels as one file:
+```
+pnpm library list                                  # on your computer (the studio's data folder), the clips' ids
+pnpm library export <clipId> heist.tar             # packs the clip: its lines, characters and media (no recordings)
+```
+Copy `heist.tar` to the server and import it into the running container (Dokploy: the service's terminal, or `docker exec`):
+```
+docker cp heist.tar <app container>:/tmp/heist.tar
+docker exec <app container> node packages/api/src/library-cli.ts import /tmp/heist.tar <hostUserId>
+docker exec <app container> rm /tmp/heist.tar
+```
+The clip arrives owned by that host (their WorkOS user id: `user_…`, in the WorkOS dashboard, or in `pnpm library` output
+once they have signed in) and **sealed** when the server has a `LIBRARY_KEY`. Leave out the user id and it joins the
+**starter pack** every host may pick from (a sealed one too). `list` shows each clip's owner and whether it is sealed;
+`assign`, `release`, `seal` and `unseal` change those later. The host picks from the clips that are ready and have
+characters that speak. (Your computer's `pnpm library` finds the studio data folder through `DOBLAJE_DATA`, default
+`./data`; the desktop app keeps its own, `~/Library/Application Support/Doblaje Studio/data` on a Mac.)
 
-## Serving the phone app elsewhere (a static host or CDN)
-The server serves the phone app at `/play/` by default, which is the simplest. To host it elsewhere, build it with the
-server's address: `VITE_PARTY_API=https://party.example.com VITE_PLAY_BASE=/ pnpm --filter @doblaje/play build`, upload
-`apps/play/dist`, and on the server set `PARTY_ORIGINS=https://play.example.com` and
-`PARTY_JOIN_URL=https://play.example.com/?room={code}`. Phones then load the page from the CDN and talk to the server
-across origins (CORS and sockets are limited to the listed origins).
+## One address for everything
+The server is the only place the phone app, the API, the sockets and the media come from (one origin). There is no CDN or
+second host to configure, and no CORS: a page of any other site is refused. That keeps the session cookie, the room tokens
+and the media guard in one place.
 
 ## Safety notes
 * Only the phones' routes exist; every room route needs the player's token, and the host's need the host key (held by the
   phone that created the room). Tokens are random and never in a page's HTML.
 * Rooms and uploads are limited (per address, per room, per file); names are cleaned; the AI key never leaves the server.
-* Security headers on every response: `nosniff`, no referrers, the microphone for the page's own origin only, HSTS over
+* Requests from another site's pages are refused (same-origin only). Security headers on every response: `nosniff`, no referrers, the microphone for the page's own origin only, HSTS over
   HTTPS.
 * Logs go to stdout; `/healthz` is for the platform's health check.

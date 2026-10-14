@@ -4,7 +4,6 @@ import { Engine, encodeWav, Mic, type ProjectStore, type RecordedTake, RecordSes
 import { clamp, type Project } from '@doblaje/core';
 import type { LineView } from '@doblaje/party';
 import { partyMedia, partyVideo } from './media.ts';
-import { serverUrl } from './server.ts';
 
 /** Seconds of scene before and after a line: enough to catch the moment, short enough to keep it frantic. */
 export const LEAD = 2;
@@ -57,7 +56,7 @@ export class PhoneRecorder {
 
   /** Load the round's project (from the room): the audio is decoded once for the whole round. */
   async load(): Promise<void> {
-    const r = await fetch(serverUrl(`/api/party/rooms/${this.#code}/project`), { headers: { 'x-party-token': this.#token } });
+    const r = await fetch(`/api/party/rooms/${this.#code}/project`, { headers: { 'x-party-token': this.#token } });
     if (!r.ok) throw new Error((await r.json().catch(() => ({ error: `HTTP ${r.status}` }))).error);
     const p = (await r.json()) as Project;
     // one private track for this phone; the studio's settings tuned for a quick take in headphones
@@ -191,7 +190,7 @@ export class PhoneRecorder {
   async submit(turn: number): Promise<void> {
     const k = this.take;
     if (!k) throw new Error('nothing recorded');
-    const r = await fetch(serverUrl(`/api/party/rooms/${this.#code}/takes?turn=${turn}&start=${k.start.toFixed(3)}`), {
+    const r = await fetch(`/api/party/rooms/${this.#code}/takes?turn=${turn}&start=${k.start.toFixed(3)}`, {
       method: 'POST',
       headers: { 'x-party-token': this.#token, 'content-type': 'audio/wav' },
       body: k.wav,

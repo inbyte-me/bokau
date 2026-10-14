@@ -7,7 +7,7 @@ its link with no account. Decisions: [ADR 0009](adr/0009-party-server-and-client
 * The identity provider (**WorkOS AuthKit**: email, Google…) holds the passwords and the emails. This server keeps a
   user id, a display name and which library clips are theirs (`users`, `clip_owners` in SQLite).
 * Signing in sets a sealed, HttpOnly, SameSite=Lax session cookie (`Secure` over HTTPS); the SDK opens and renews it. The
-  phone app and the API share one origin, so the cookie just works (keep it that way: no CDN for the app).
+  phone app and the API share one origin, so the cookie just works (a single origin by design).
 * `GET /auth/login?return=/play/` → provider → `GET /auth/callback` → back to `return` (only a path on this site: no open
   redirect); `GET /auth/logout`; `GET /api/me` says who you are and whether hosting needs a login.
 
@@ -34,8 +34,8 @@ separate from staging ones: the staging environment is for local work and trying
 the production environment's API key and client id, with the same redirects registered there.
 
 ## Giving clips an owner
-Clips are prepared in the studio and copied into the server's data folder (docs/deployment.md, *Clips*); until uploads
-exist, assign them with the owner's WorkOS user id (shown in the WorkOS dashboard, or in the `users` table after their
+Clips are prepared in the studio and moved to the server as a bundle (`pnpm library export` / `import`, docs/deployment.md, *Clips*);
+until uploads exist, give them to an owner with their WorkOS user id (shown in the WorkOS dashboard, or in the `users` table after their
 first sign-in): `pnpm library assign <clipId> <userId>`, `pnpm library release <clipId>` (back to the starter pack),
 `pnpm library list`.
 

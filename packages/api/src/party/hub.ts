@@ -91,8 +91,6 @@ export interface HubDeps {
   emptyRoomMinutes?: number;
   /** rooms open at once (default 20) */
   maxRooms?: number;
-  /** may a page of this origin open a socket? (its own host always may) */
-  originAllowed?: (origin: string, host: string | undefined) => boolean;
   /** the address a request really comes from (behind a proxy: its forwarded header) */
   clientIp?: (req: IncomingMessage) => string;
   now?: () => number;
@@ -228,7 +226,7 @@ export class PartyHub {
   /** Hand an HTTP upgrade on /party/ws to the hub. Browsers must come from the same origin as the page. */
   upgrade(req: IncomingMessage, socket: Duplex, head: Buffer): void {
     const origin = req.headers.origin;
-    if (origin && !(this.#deps.originAllowed?.(origin, req.headers.host) ?? new URL(origin).host === req.headers.host)) {
+    if (origin && new URL(origin).host !== req.headers.host) {
       socket.end('HTTP/1.1 403 Forbidden\r\n\r\n');
       return;
     }

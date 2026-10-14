@@ -1,8 +1,7 @@
 // Files of a party room on the party server, behind the player's token.
-import { serverUrl } from './server.ts';
 
 /** A file of the round's project (`proxy.mp4`, `poster.jpg`, a take…) as the phone asks for it. */
-export const partyMedia = (code: string, token: string, file: string): string => serverUrl(`/party/${code}/media/${file}?t=${encodeURIComponent(token)}`);
+export const partyMedia = (code: string, token: string, file: string): string => `/party/${code}/media/${file}?t=${encodeURIComponent(token)}`;
 
 const videos = new Map<string, Promise<string>>();
 

@@ -8,7 +8,6 @@
   import { GAMES } from '@doblaje/party-ui/games';
   import { t } from '@doblaje/ui/i18n';
   import { onMount } from 'svelte';
-  import { serverUrl } from './server.ts';
 
   interface Props {
     client: PartyClient<PlayerView>;
@@ -35,7 +34,7 @@
   let clips = $state<ClipInfo[] | null>(null);
   let clipError = $state('');
   onMount(() => {
-    fetch(serverUrl(`/api/party/rooms/${code}/clips`), { headers: { 'x-party-token': token } })
+    fetch(`/api/party/rooms/${code}/clips`, { headers: { 'x-party-token': token } })
       .then(async (r) =>
         r.ok
           ? ((await r.json()) as ClipInfo[])
@@ -48,7 +47,7 @@
         clipError = e instanceof Error ? e.message : String(e);
       });
   });
-  const poster = (id: string) => serverUrl(`/party/${code}/clips/${id}/poster.jpg?t=${encodeURIComponent(token)}`);
+  const poster = (id: string) => `/party/${code}/clips/${id}/poster.jpg?t=${encodeURIComponent(token)}`;
 
   let copied = $state(false);
   async function invite() {

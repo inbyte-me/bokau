@@ -1,5 +1,5 @@
 // Rooms without a TV: a phone creates the room, hosts it and plays; a screen only watches; the server renders the result.
-// And the server mode meant for a domain: only the phones' routes, limits per address, CORS for configured origins.
+// And the server mode meant for a domain: only the phones' routes, limits per address, one origin only.
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { PlayerView, ScreenView, ServerMessage } from '@doblaje/party';
@@ -174,8 +174,8 @@ test('the server listens to takes itself when it can (so a room needs no TV for 
   }
 });
 
-test('party server mode: only the phones’ routes, a health check, limits per address, CORS for configured origins', async () => {
-  const srv = await startApp({ mode: 'party', party: { createsPerHour: 2, trustProxy: 1, origins: ['https://play.example.com'] } });
+test('party server mode: only the phones’ routes, a health check, limits per address, one origin only', async () => {
+  const srv = await startApp({ mode: 'party', party: { createsPerHour: 2, trustProxy: 1 } });
   try {
     const call = (method: string, url: string, headers: Record<string, string> = {}) => srv.api(method, url, undefined, headers);
     assert.equal((await call('GET', '/healthz')).data.mode, 'party');
@@ -188,18 +188,12 @@ test('party server mode: only the phones’ routes, a health check, limits per a
     assert.equal((await call('POST', '/api/party/rooms', { 'x-forwarded-for': '203.0.113.7' })).status, 201);
     assert.equal((await call('POST', '/api/party/rooms', { 'x-forwarded-for': '203.0.113.7' })).status, 429);
     assert.equal((await call('POST', '/api/party/rooms', { 'x-forwarded-for': '198.51.100.9' })).status, 201, 'another address is not limited');
-    // pages of other origins: only the configured ones
-    const pre = await fetch(`${srv.base}/api/party/rooms`, {
-      method: 'OPTIONS',
-      headers: { origin: 'https://play.example.com', 'access-control-request-method': 'POST' },
-    });
-    assert.equal(pre.status, 204);
-    assert.equal(pre.headers.get('access-control-allow-origin'), 'https://play.example.com');
+    // one origin only: a page of another site cannot use it (its POST is refused, with or without a preflight)
     const bad = await call('POST', '/api/party/rooms', { origin: 'https://evil.example.com', 'x-forwarded-for': '198.51.100.10' });
-    assert.equal(bad.status, 403, 'an unknown origin cannot use it');
-    const ok = await call('POST', '/api/party/rooms', { origin: 'https://play.example.com', 'x-forwarded-for': '198.51.100.11' });
-    assert.equal(ok.status, 201);
-    assert.equal(ok.headers.get('access-control-allow-origin'), 'https://play.example.com');
+    assert.equal(bad.status, 403);
+    assert.equal(bad.headers.get('access-control-allow-origin'), null, 'and nothing invites other origins');
+    const same = await call('POST', '/api/party/rooms', { origin: srv.base, 'x-forwarded-for': '198.51.100.11' });
+    assert.equal(same.status, 201, 'the page this server serves can');
     const root = await fetch(`${srv.base}/`, { redirect: 'manual' });
     assert.equal(root.status, 302);
     assert.equal(root.headers.get('x-content-type-options'), 'nosniff');

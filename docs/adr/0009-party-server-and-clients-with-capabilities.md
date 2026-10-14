@@ -21,7 +21,7 @@ picker, the transcriber and the show player at once.
   from the same server time. No client that can render: the room still works, without the file.
 * **Two server modes from one codebase.** `studio` is the local app (studio + TV on localhost, a self-signed HTTPS
   listener for phones on the Wi-Fi). `party` has one listener, only the phones' routes, plain HTTP behind a proxy that
-  terminates TLS or HTTPS with a certificate, limits per address, CORS for configured origins, and a media policy: the
+  terminates TLS or HTTPS with a certificate, limits per address, a single origin (no CORS, no CDN), and a media policy: the
   files of a room are deleted when everyone has left.
 * **Shared pieces** for every client live in `@doblaje/party-ui` (game list, languages, the host's buttons) and
   `@doblaje/ui`; components there take plain props, never a host context or an API.

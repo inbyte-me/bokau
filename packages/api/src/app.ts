@@ -94,14 +94,6 @@ export async function createApp(overrides: ConfigOverrides = {}): Promise<App> {
     return (hops > 0 && forwarded.length ? forwarded[Math.max(0, forwarded.length - hops)] : undefined) ?? req.socket.remoteAddress ?? '';
   };
   const creates = new RateLimit(cfg.party.createsPerHour, 3600_000);
-  /** pages of other origins that may use this server (a phone app on a CDN), besides its own */
-  const originAllowed = (origin: string, host: string | undefined): boolean => {
-    try {
-      return new URL(origin).host === host || cfg.party.origins.includes(origin.replace(/\/$/, ''));
-    } catch {
-      return false;
-    }
-  };
   const ledger = new AiLedger(db);
   const ai = new OpenRouter(cfg.ai, ledger);
   // party games write for guests who are crude on purpose: their own pair of models (a free one first, then a cheap one
@@ -118,7 +110,6 @@ export async function createApp(overrides: ConfigOverrides = {}): Promise<App> {
     // a party server forgets a room's media when everyone has left (a studio keeps its rounds as projects)
     ...(cfg.mode === 'party' ? { emptyRoomMinutes: cfg.party.emptyRoomMinutes } : {}),
     clientIp,
-    originAllowed,
     ...(cfg.party.transcribe ? { transcribe: createTranscriber(cfg.media, cfg.modelsDir) } : {}),
     // the finished round as one file: the host's rendered mix over the round's picture (burning the subtitles in)
     render: async (id, { subtitles }) => {
@@ -130,7 +121,7 @@ export async function createApp(overrides: ConfigOverrides = {}): Promise<App> {
       fs.rmSync(projects.file(id, 'renders/mix.wav'), { force: true });
       return 'result.mp4';
     },
-    joinUrl: (code) => (cfg.party.joinUrl ? cfg.party.joinUrl.replace('{code}', code) : `${partyBase() ?? ''}/play/?room=${code}`),
+    joinUrl: (code) => `${partyBase() ?? ''}/play/?room=${code}`,
     suggest: (input) => (partyAi.status().configured ? suggestLine(partyAi, input) : Promise.resolve(null)),
     // written games: the AI when it can, the offline generator otherwise (never blocks a party)
     write: async ({ mode, premise, genre, language, lines }) => {
@@ -282,27 +273,13 @@ export async function createApp(overrides: ConfigOverrides = {}): Promise<App> {
     res.setHeader('permissions-policy', 'microphone=(self), camera=(), geolocation=()');
     const secure = !!cfg.party.tls || String(req.headers['x-forwarded-proto'] ?? '') === 'https' || (req.socket as { encrypted?: boolean }).encrypted === true;
     if (secure && cfg.mode === 'party') res.setHeader('strict-transport-security', 'max-age=31536000');
-    // a phone app served from another origin (a CDN): let exactly the configured origins in
-    const origin = req.headers.origin;
-    if (origin && cfg.party.origins.includes(origin.replace(/\/$/, ''))) {
-      res.setHeader('access-control-allow-origin', origin);
-      res.setHeader('vary', 'origin');
-      res.setHeader('access-control-allow-headers', 'content-type, x-party-token, x-party-host');
-      res.setHeader('access-control-allow-methods', 'GET, POST, HEAD, OPTIONS');
-      res.setHeader('access-control-max-age', '600');
-    }
   };
   /** Phones only: the phone app, the player routes and the round's media. Nothing of the studio or the AI. */
   async function handleParty(req: IncomingMessage, res: ServerResponse) {
     const url = new URL(req.url || '/', 'https://x');
     const p = decodeURIComponent(url.pathname);
     guard(req, res);
-    if (req.method === 'OPTIONS') {
-      res.writeHead(204);
-      res.end();
-      return;
-    }
-    if (req.method !== 'GET' && req.method !== 'HEAD' && req.headers.origin && !originAllowed(req.headers.origin, req.headers.host)) {
+    if (req.method !== 'GET' && req.method !== 'HEAD' && req.headers.origin && new URL(req.headers.origin).host !== req.headers.host) {
       throw new AppError(403, 'cross-origin request blocked');
     }
     if (p === '/healthz') return json(res, 200, { ok: true, mode: cfg.mode, rooms: party.size });

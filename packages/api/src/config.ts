@@ -27,12 +27,8 @@ export interface PartyConfig {
   host: string;
   /** address printed in the QR code instead of https://<lan-ip>:<port> (a tunnel, a real domain) */
   publicUrl: string | null;
-  /** invite link for a phone app served from another address, `{code}` standing for the room code (default: PARTY_URL/play/?room=CODE) */
-  joinUrl: string | null;
   /** reverse proxies in front of the server (their `x-forwarded-for` is believed for this many hops); 0: none */
   trustProxy: number;
-  /** other origins whose pages may talk to this server (a phone app served from a CDN); this server's own is always allowed */
-  origins: string[];
   /** rooms open at once */
   maxRooms: number;
   /** rooms one address may open per hour */
@@ -114,11 +110,6 @@ export function loadConfig(o: ConfigOverrides = {}): AppConfig {
   const playDist = path.join(REPO_ROOT, 'apps', 'play', 'dist');
   const partyPort = env.PARTY_PORT === 'off' ? null : Number(env.PARTY_PORT ?? 5178);
   const mode: ServerMode = (o.mode ?? env.DOBLAJE_MODE) === 'party' ? 'party' : 'studio';
-  const list = (v: string | undefined) =>
-    (v ?? '')
-      .split(',')
-      .map((x) => x.trim().replace(/\/$/, ''))
-      .filter(Boolean);
   const number = (v: string | undefined, fallback: number) => (v !== undefined && v !== '' && Number.isFinite(Number(v)) ? Number(v) : fallback);
   return {
     mode,
@@ -135,9 +126,7 @@ export function loadConfig(o: ConfigOverrides = {}): AppConfig {
       port: partyPort,
       host: env.PARTY_HOST || '0.0.0.0',
       publicUrl: env.PARTY_URL || null,
-      joinUrl: env.PARTY_JOIN_URL || null,
       trustProxy: number(env.TRUST_PROXY, 0),
-      origins: list(env.PARTY_ORIGINS),
       maxRooms: number(env.PARTY_MAX_ROOMS, 20),
       createsPerHour: number(env.PARTY_CREATES_PER_HOUR, 12),
       emptyRoomMinutes: number(env.PARTY_EMPTY_ROOM_MINUTES, 5),

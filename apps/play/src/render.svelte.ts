@@ -3,7 +3,6 @@
 import { audioBufferToWav, Engine, renderStem } from '@doblaje/audio';
 import type { Project } from '@doblaje/core';
 import { partyMedia } from './media.ts';
-import { serverUrl } from './server.ts';
 
 export class MixRender {
   state = $state<'idle' | 'rendering' | 'error'>('idle');
@@ -15,7 +14,7 @@ export class MixRender {
     this.error = '';
     try {
       const headers = { 'x-party-token': token };
-      const r = await fetch(serverUrl(`/api/party/rooms/${code}/project`), { headers });
+      const r = await fetch(`/api/party/rooms/${code}/project`, { headers });
       if (!r.ok) throw new Error(`project: ${r.status}`);
       const project = (await r.json()) as Project;
       const engine = new Engine();
@@ -23,7 +22,7 @@ export class MixRender {
       await engine.load(project, null);
       if (!engine.assets) throw new Error('nothing to render');
       const mix = await renderStem(project, engine.assets, 'mix');
-      const up = await fetch(serverUrl(`/api/party/rooms/${code}/mix`), { method: 'POST', headers, body: audioBufferToWav(mix, 16) });
+      const up = await fetch(`/api/party/rooms/${code}/mix`, { method: 'POST', headers, body: audioBufferToWav(mix, 16) });
       if (!up.ok) throw new Error(`mix: ${up.status}`);
       this.state = 'idle';
     } catch (e) {

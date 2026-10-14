@@ -4,7 +4,6 @@
 <script lang="ts">
   import { t } from '@doblaje/ui/i18n';
   import { onDestroy } from 'svelte';
-  import { serverUrl } from './server.ts';
 
   interface Props {
     urls: string[];
@@ -18,7 +17,7 @@
   let blocked = $state(false);
   let index = Math.floor(Math.random() * 1000);
 
-  const src = (i: number) => (urls.length ? serverUrl(`${urls[i % urls.length]}?t=${encodeURIComponent(token)}`) : '');
+  const src = (i: number) => (urls.length ? `${urls[i % urls.length]}?t=${encodeURIComponent(token)}` : '');
 
   function unlock() {
     const a = audio;

@@ -7,8 +7,7 @@ import { defineConfig } from 'vite';
 const API = process.env.DOBLAJE_API || 'http://127.0.0.1:5177';
 
 export default defineConfig({
-  // served by the party server at /play/; `VITE_PLAY_BASE=/` for a static host that serves the app at its root
-  base: process.env.VITE_PLAY_BASE || '/play/',
+  base: '/play/',
   plugins: [svelte()],
   server: {
     port: 5174,

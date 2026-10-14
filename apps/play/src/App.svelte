@@ -1,14 +1,13 @@
 <!-- The phone: join a room by code and name, then follow the room. A token in localStorage brings the same
      player back after a reload or a dropped Wi-Fi; ?seat=n keeps several test players apart in one browser. -->
 <script lang="ts">
-  import { PartyClient, type PlayerView } from '@doblaje/party';
+  import { PartyClient, type PlayerView, partySocketUrl } from '@doblaje/party';
   import { t } from '@doblaje/ui/i18n';
   import { onMount } from 'svelte';
   import { forgetToken, loadHostKey, loadName, loadToken, saveHostKey, saveName, saveToken } from './identity.ts';
   import Join from './Join.svelte';
   import Room from './Room.svelte';
   import { MixRender } from './render.svelte.ts';
-  import { serverUrl, socketUrl } from './server.ts';
 
   const params = new URLSearchParams(location.search);
   const seat = params.get('seat') ?? '';
@@ -22,7 +21,7 @@
   /** who is hosting here, and whether a room needs a sign-in (the server decides: a laptop's rooms are anonymous) */
   let me = $state<{ loginRequired: boolean; person: { id: string; name: string } | null }>({ loginRequired: false, person: null });
   onMount(() => {
-    fetch(serverUrl('/api/me'), { credentials: 'include' })
+    fetch('/api/me', { credentials: 'include' })
       .then((r) => (r.ok ? r.json() : null))
       .then((m: typeof me | null) => {
         if (!m) return;
@@ -33,7 +32,7 @@
   });
   /** go and sign in, and come back to this page */
   const signIn = () => {
-    location.href = serverUrl(`/auth/login?return=${encodeURIComponent(location.pathname + location.search)}`);
+    location.href = `/auth/login?return=${encodeURIComponent(location.pathname + location.search)}`;
   };
 
   function join(nextCode: string, nextName?: string) {
@@ -46,7 +45,7 @@
     token = loadToken(code, seat);
     error = '';
     const c = new PartyClient<PlayerView>({
-      url: socketUrl(),
+      url: partySocketUrl(location),
       // the host key (a room this phone created) makes it the host as well as a player; any phone can render the mix when asked
       hello: () => ({
         type: 'hello-player',
@@ -80,7 +79,7 @@
     if (nextName) saveName(seat, nextName);
     if (me.loginRequired && !me.person) return signIn();
     try {
-      const r = await fetch(serverUrl('/api/party/rooms'), { method: 'POST', credentials: 'include' });
+      const r = await fetch('/api/party/rooms', { method: 'POST', credentials: 'include' });
       const body = (await r.json()) as { code?: string; hostKey?: string; error?: string; code_?: string };
       if (r.status === 401) return signIn(); // the session ended meanwhile
       if (!r.ok || !body.code || !body.hostKey) throw new Error(body.error ?? `HTTP ${r.status}`);
