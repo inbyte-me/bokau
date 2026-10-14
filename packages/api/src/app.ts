@@ -85,7 +85,11 @@ export async function createApp(overrides: ConfigOverrides = {}): Promise<App> {
       return false;
     }
   };
-  const ai = new OpenRouter(cfg.ai, new AiLedger(db));
+  const ledger = new AiLedger(db);
+  const ai = new OpenRouter(cfg.ai, ledger);
+  // party games write for guests who are crude on purpose: their own pair of models (a free one first, then a cheap one
+  // that does not refuse), on the same key, ledger and spend cap
+  const partyAi = new OpenRouter({ ...cfg.ai, defaultModel: cfg.party.aiModel, fallbackModel: cfg.party.aiFallback }, ledger);
   const party = new PartyHub({
     projects,
     sounds,
@@ -106,16 +110,16 @@ export async function createApp(overrides: ConfigOverrides = {}): Promise<App> {
       return 'result.mp4';
     },
     joinUrl: (code) => (cfg.party.joinUrl ? cfg.party.joinUrl.replace('{code}', code) : `${partyBase() ?? ''}/play/?room=${code}`),
-    suggest: (input) => (ai.status().configured ? suggestLine(ai, input) : Promise.resolve(null)),
+    suggest: (input) => (partyAi.status().configured ? suggestLine(partyAi, input) : Promise.resolve(null)),
     // written games: the AI when it can, the offline generator otherwise (never blocks a party)
     write: async ({ mode, premise, genre, language, lines }) => {
       const out = language; // the players' language, whatever the scene's
-      const r = await rewrite(ai, mode, lines, {
+      const r = await rewrite(partyAi, mode, lines, {
         prompt: mode === 'badlip' ? premise : undefined,
         genre: mode === 'genre' ? genre : undefined,
         outLang: out,
         fromLang: mode === 'badlip' ? out : undefined,
-        offline: !ai.status().configured,
+        offline: !partyAi.status().configured,
       });
       return Object.fromEntries(r.lines.map((l) => [l.id, { text: l.text, direction: l.direction }]));
     },
@@ -133,8 +137,8 @@ export async function createApp(overrides: ConfigOverrides = {}): Promise<App> {
       projects.save(fresh);
     },
     // trailer games: texts nobody wrote, and the words around the trailer (never blocks: the offline copy is the floor)
-    compose: (input) => (ai.status().configured ? composeText(ai, input) : Promise.resolve(null)),
-    trailer: async (job) => (ai.status().configured ? await trailerCopy(ai, job) : null) ?? trailerCopyOffline(job),
+    compose: (input) => (partyAi.status().configured ? composeText(partyAi, input) : Promise.resolve(null)),
+    trailer: async (job) => (partyAi.status().configured ? await trailerCopy(partyAi, job) : null) ?? trailerCopyOffline(job),
   });
   const ctx: AppContext = {
     cfg,

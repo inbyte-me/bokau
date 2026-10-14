@@ -175,3 +175,62 @@ test('garbage model output degrades to offline for party tasks', async () => {
     await up.close();
   }
 });
+
+test('a free model costs nothing: its reported cost of 0 is believed, not replaced by an estimate from the tokens', async () => {
+  const up = await mockUpstream(() => ({
+    json: {
+      model: 'vendor/free-model:free',
+      choices: [{ message: { content: JSON.stringify({ lines: [{ id: 'a', text: 'Hi pal' }] }) } }],
+      usage: { cost: 0, total_tokens: 5000 },
+    },
+  }));
+  const app = await startApp({ ai: { openrouterBase: up.url, defaultModel: 'vendor/free-model:free' } });
+  try {
+    const r = await app.api('POST', '/api/ai/rewrite', { task: 'badlip', cues: [cues[0]], params: { prompt: 'x', outLang: 'en' } });
+    assert.equal(r.status, 200, JSON.stringify(r.data));
+    assert.equal((await app.api('GET', '/api/ai/status')).data.spentUsd, 0, 'nothing spent');
+  } finally {
+    await app.close();
+    await up.close();
+  }
+});
+
+test('party games use their own pair of models: a free one first, a cheap one when the free one runs out of requests', async () => {
+  const up = await mockUpstream((b) =>
+    b.model === 'vendor/free-model:free'
+      ? { status: 429, json: { error: { message: 'free models are limited to 50 requests a day' } } }
+      : { json: { model: b.model, choices: [{ message: { content: 'Mi pato tiene hambre' } }], usage: { cost: 0.00001, total_tokens: 50 } } },
+  );
+  const app = await startApp({
+    ai: { openrouterBase: up.url },
+    party: { aiModel: 'vendor/free-model:free', aiFallback: 'vendor/cheap-model' },
+  });
+  try {
+    const { code, hostKey } = (await app.api('POST', '/api/party/rooms')).data;
+    // a dub round with the suggestion asked for the first line
+    const { Client } = await import('./support/party.ts');
+    const clipId = await app.ingestFixture('clip_voices.mp4', 'pro', { template: true });
+    await app.api('PUT', `/api/projects/${clipId}`, {
+      speakers: { list: [{ id: 'A', name: 'Ana', color: '#d97b66', muted: false, solo: false }], segments: [] },
+      cues: [{ id: 'c1', start: 0.5, end: 2, text: 'Hola, ¿qué tal?', character: 'Ana', note: '' }],
+    });
+    const host = new Client(app.base);
+    await host.open();
+    host.send({ type: 'hello-player', code, name: 'Pau', hostKey });
+    host.send({ type: 'host', command: { type: 'pick-clip', clipId } });
+    host.send({ type: 'host', command: { type: 'cast' } });
+    await host.view((v) => (v as { board?: { phase: string } }).board?.phase === 'casting');
+    host.send({ type: 'host', command: { type: 'begin' } });
+    const mine = await host.view((v) => !!(v as { line?: { suggestion?: string } }).line?.suggestion);
+    assert.equal((mine as { line: { suggestion: string } }).line.suggestion, 'Mi pato tiene hambre');
+    assert.deepEqual(
+      up.reqs.map((r) => r.body.model),
+      ['vendor/free-model:free', 'vendor/cheap-model'],
+      'the free model was asked first, then the cheap one answered',
+    );
+    host.close();
+  } finally {
+    await app.close();
+    await up.close();
+  }
+});

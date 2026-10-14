@@ -53,7 +53,26 @@ certificate and key you obtained, e.g. from Let's Encrypt).
 | `PARTY_RETENTION_HOURS` | `24` | backstop: any round project older than this is deleted |
 | `PARTY_TRANSCRIBE` | off | the server listens to takes itself (speech-to-text in Node; the model downloads on first use) |
 | `OPENROUTER_API_KEY`, `SPEND_CAP_USD` | – , `3.5` | the AI (server only) and its cap for the whole server |
+| `PARTY_AI_MODEL`, `PARTY_AI_FALLBACK` | `nvidia/nemotron-3-ultra-550b-a55b:free`, `deepseek/deepseek-v4.1-flash` | the models the party games use: a free one first, a cheap one when the free one is out of requests or fails (see *The AI models*) |
 | `DOBLAJE_DATA`, `DOBLAJE_MODELS` | `./data`, `./models` | data and speech models (a volume in Docker) |
+
+## The AI models
+Party games ask the AI for short, silly texts, about what guests said, and guests are crude on purpose. So the party has
+its own pair of models (`PARTY_AI_MODEL`, `PARTY_AI_FALLBACK`; the studio's translation keeps its own defaults), on the
+same key, ledger and spend cap:
+* **Main, free:** `nvidia/nemotron-3-ultra-550b-a55b:free`. Free models cost nothing (the cap is not touched), but
+  OpenRouter allows 50 requests a day to an account that has never bought credits and 1000 to one that has bought $10 or
+  more, shared by every room on the key. With a free-tier privacy setting off, some free endpoints are not routed to at all.
+* **Fallback, cheap:** `deepseek/deepseek-v4.1-flash` (about $0.012 in / $0.60 out per million tokens, so a call costs a
+  hundredth of a cent), which OpenRouter does not moderate and the roleplay traffic favours. It answers whenever the
+  free model is out of requests, rejects the call or is unavailable, and the room never notices.
+* **Why not the studio defaults:** the fallback there, Claude Haiku 5.5, is moderated by its provider and may lecture or
+  refuse a rude take; the game treats a refusal as "no suggestion", which is safe but dull.
+
+These picks come from OpenRouter's catalogue (free list, prices, moderation flags) and roleplay-traffic rankings, **not**
+from measuring them: run `pnpm probe:models` with a working key to try them (or any other model ids) on the real
+prompts with crude English and Spanish input; it reports refusals, unusable answers and JSON, time and cost per model.
+Swap `PARTY_AI_MODEL` / `PARTY_AI_FALLBACK` for whatever wins. Any failure of both models means the offline generators.
 
 ## Media policy
 A room's files are made for the round and are **deleted for good** once everyone has left the room (after

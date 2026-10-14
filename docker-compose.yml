@@ -17,6 +17,8 @@ services:
       SPEND_CAP_USD: ${SPEND_CAP_USD:-3.5}
       OPENROUTER_MODEL: ${OPENROUTER_MODEL:-qwen/qwen3.7-flash}
       OPENROUTER_FALLBACK_MODEL: ${OPENROUTER_FALLBACK_MODEL:-anthropic/claude-haiku-5.5}
+      PARTY_AI_MODEL: ${PARTY_AI_MODEL:-nvidia/nemotron-3-ultra-550b-a55b:free}   # party games: a free model first…
+      PARTY_AI_FALLBACK: ${PARTY_AI_FALLBACK:-deepseek/deepseek-v4.1-flash}        # …then a cheap one that tolerates crude players
       PARTY_MAX_ROOMS: ${PARTY_MAX_ROOMS:-20}
       PARTY_CREATES_PER_HOUR: ${PARTY_CREATES_PER_HOUR:-12}
       PARTY_EMPTY_ROOM_MINUTES: ${PARTY_EMPTY_ROOM_MINUTES:-5}

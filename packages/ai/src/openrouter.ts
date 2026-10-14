@@ -88,10 +88,11 @@ export class OpenRouter {
       const data = (await r.json().catch(() => ({}))) as ChatResponse;
       if (!r.ok) throw new AppError(r.status === 402 ? 402 : 502, data?.error?.message || `OpenRouter ${r.status}`);
       const text = data.choices?.[0]?.message?.content ?? '';
-      const cost = Number(data.usage?.cost) || estimateCost(data.usage);
+      // a free model reports a cost of exactly 0: believe it (only a missing cost is estimated from the tokens)
+      const cost = typeof data.usage?.cost === 'number' ? data.usage.cost : estimateCost(data.usage);
       this.ledger.record({ model: data.model || m, task, costUsd: cost, tokens: data.usage?.total_tokens || 0 });
       if (!text) throw new AppError(502, 'empty model response');
-      return { text, model: data.model || m, costUsd: Number(data.usage?.cost) || 0 };
+      return { text, model: data.model || m, costUsd: typeof data.usage?.cost === 'number' ? data.usage.cost : 0 };
     };
     const first = model || this.cfg.defaultModel;
     try {

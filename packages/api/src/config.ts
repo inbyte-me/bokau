@@ -36,6 +36,9 @@ export interface PartyConfig {
   retentionHours: number;
   /** party mode: serve HTTPS directly with this certificate (otherwise plain HTTP, for a proxy that terminates TLS) */
   tls: { cert: string; key: string } | null;
+  /** the AI the party games use (suggested lines, directions, cards, the trailer's words, written games): a free model first, then a cheap one that tolerates crude players when the free one is out of requests or fails */
+  aiModel: string;
+  aiFallback: string;
   /** the server listens to takes (speech-to-text on the server) so a room needs no TV for it */
   transcribe: boolean;
 }
@@ -129,6 +132,8 @@ export function loadConfig(o: ConfigOverrides = {}): AppConfig {
       emptyRoomMinutes: number(env.PARTY_EMPTY_ROOM_MINUTES, 5),
       retentionHours: number(env.PARTY_RETENTION_HOURS, 24),
       tls: env.TLS_CERT && env.TLS_KEY ? { cert: env.TLS_CERT, key: env.TLS_KEY } : null,
+      aiModel: env.PARTY_AI_MODEL || 'nvidia/nemotron-3-ultra-550b-a55b:free',
+      aiFallback: env.PARTY_AI_FALLBACK || 'deepseek/deepseek-v4.1-flash',
       transcribe: env.PARTY_TRANSCRIBE === '1',
       ...o.party,
     },

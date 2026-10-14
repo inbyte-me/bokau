@@ -79,7 +79,7 @@ The mix is rendered **in the browser with the same audio graph used for preview*
 * **TV:** put the browser on the TV (HDMI), press **F**. A presenter clicker or any keyboard works from the sofa.
 
 ## AI cost control
-* Default model `qwen/qwen3.7-flash` (≈ $0.03 / $0.13 per million tokens → a typical call costs ≈ **$0.00004**). Choose others in the AI tab: Qwen3-235B, Ling, Claude Haiku 5.5 (most precise syllables), Gemini Flash Lite. Only a short allow-list of cheap models is accepted.
+* Default model `qwen/qwen3.7-flash` (≈ $0.03 / $0.13 per million tokens → a typical call costs ≈ **$0.00004**). Choose others in the AI tab: Qwen3-235B, Ling, Claude Haiku 5.5 (most precise syllables), Gemini Flash Lite. Only a short allow-list of cheap models is accepted. Party games use their own pair (a free model first, a cheap one that tolerates crude players as fallback: `PARTY_AI_MODEL`, `PARTY_AI_FALLBACK`; see docs/deployment.md).
 * A **local ledger** (the `ai_calls` table in `data/doblaje.db`) adds up the real cost OpenRouter reports for every call and **refuses further calls at $3.50** (`SPEND_CAP_USD`), below the key's own limit. After that, party games fall back to the offline generator.
 * A short repair pass re-asks only the lines whose syllable count is off.
 * The key never leaves the server; the server only listens on localhost and rejects foreign `Host`/`Origin` headers.

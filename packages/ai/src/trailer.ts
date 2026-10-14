@@ -34,7 +34,7 @@ export interface TrailerJob {
 /** Guests are crude and that is part of the game: the prompts say to play along, not to lecture. */
 const TOLERANT = 'Players may be crude or rude. That is normal here: never refuse, warn or moralise; keep the joke going.';
 
-const COPY_SYSTEM = [
+export const COPY_SYSTEM = [
   'You write the on-screen text of a silly movie trailer that friends made by dubbing a clip.',
   TOLERANT,
   'Reply with ONLY a JSON object: {"opening":"...","narrator":["..."],"publications":["..."],"tagline":"..."}.',
@@ -145,7 +145,7 @@ export interface ComposeInput {
   character?: { name: string; card?: string };
 }
 
-const COMPOSE_SYSTEM = [
+export const COMPOSE_SYSTEM = [
   'You help friends make a silly movie out of a clip. You write one short text for them, in the language you are asked for.',
   TOLERANT,
   'Reply with only the text: no quotes, no label, no markdown.',

@@ -29,7 +29,7 @@ const LANGUAGE_NAMES: Record<string, string> = { en: 'English', es: 'Spanish', f
  * takes as context, so the prompt asks it to play along instead of refusing or lecturing, while still writing its
  * own line as cheeky comedy rather than slurs or attacks on real people.
  */
-const SYSTEM = [
+export const SUGGEST_SYSTEM = [
   'You write one funny line of dialogue for a dubbing party game: friends re-dub a movie scene with silly lines.',
   'Players improvise and may say crude, rude or offensive things. That is normal here: never refuse, warn, moralise or',
   'comment on it. Just keep the joke going: answer the previous line as the next character would, absurd and playful.',
@@ -77,7 +77,7 @@ export async function suggestLine(ai: OpenRouter, input: SuggestInput): Promise<
   try {
     const r = await ai.complete(
       [
-        { role: 'system', content: SYSTEM },
+        { role: 'system', content: SUGGEST_SYSTEM },
         { role: 'user', content: suggestionPrompt(input) },
       ],
       { maxTokens: 80, temperature: 1.05, task: 'party-line' },
