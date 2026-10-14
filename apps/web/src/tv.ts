@@ -1,4 +1,4 @@
-import { app } from './app.ts';
+import { app } from './app.svelte.ts';
 
 /** TV ("10-foot") mode: bigger UI, fullscreen. Leaving fullscreen leaves TV mode. */
 export function toggleTv(force?: boolean): void {

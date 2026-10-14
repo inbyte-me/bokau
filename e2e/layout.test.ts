@@ -38,7 +38,6 @@ test.before(async () => {
   pro.cues = many; // a long cue list, so the panel really has to scroll
   pro.tracks = [1, 2, 3, 4, 5, 6].map((n) => ({ ...pro.tracks[0], id: `t${n}`, name: `Voice ${n}` }));
   await app.api('PUT', `/api/projects/${ids.pro}`, pro);
-  ids.party = await app.ingestFixture('clip_es.mp4', 'party');
   const pod = await app.api('POST', '/api/projects/from-path', { path: fx('rec_stream.webm'), mode: 'podcast', name: 'Episode' });
   await app.waitJob(pod.data.job);
   ids.pod = pod.data.project.id;
@@ -124,10 +123,10 @@ const SCREENS: Screen[] = [
     },
   },
   {
-    name: 'party: pick a clip',
+    name: 'party room (TV)',
     open: async (p) => {
       await p.goto(`${app.base}/#/party`);
-      await p.waitForSelector('#party-picker');
+      await p.waitForSelector('#room-code');
     },
   },
   {
@@ -185,22 +184,6 @@ const SCREENS: Screen[] = [
       await p.click('#devices-done');
       await p.click('#export-btn');
       await p.waitForSelector('.modal #ex-go');
-    },
-  },
-  {
-    name: 'party hub',
-    open: async (p) => {
-      await p.goto(`${app.base}/#/p/${ids.party}`);
-      await p.waitForSelector('#mode-badlip', { timeout: 30000 });
-    },
-  },
-  {
-    name: 'party setup',
-    open: async (p) => {
-      await p.goto(`${app.base}/#/p/${ids.party}`);
-      await p.waitForSelector('#mode-blind', { timeout: 30000 });
-      await p.evaluate(() => document.querySelector<HTMLElement>('#mode-blind')?.click());
-      await p.waitForSelector('#blind-go');
     },
   },
   {

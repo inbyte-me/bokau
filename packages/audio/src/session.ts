@@ -45,12 +45,14 @@ export class RecordSession extends Emitter<SessionEvents> {
   #retarget: number | null = null;
   #segs: Segment[] | null = null;
   #startFrame = 0;
+  readonly #upload: TakeUploader;
 
-  constructor({ engine, mic, store }: { engine: Engine; mic: Mic; store: ProjectStore }) {
+  constructor({ engine, mic, store, upload }: { engine: Engine; mic: Mic; store: ProjectStore; upload?: TakeUploader }) {
     super();
     this.engine = engine;
     this.mic = mic;
     this.store = store;
+    this.#upload = upload ?? uploadToProject;
   }
 
   /** await all pending take uploads (export needs them on the server) */
@@ -296,10 +298,7 @@ export class RecordSession extends Emitter<SessionEvents> {
     );
     for (const { take, data } of made) {
       // upload the dry takes in the background
-      const up: Promise<void> = fetch(`/api/projects/${p.id}/takes/${take.file}`, { method: 'POST', body: encodeWav([data], sr, 16) })
-        .then((r) => {
-          if (!r.ok) throw new Error(`upload ${r.status}`);
-        })
+      const up: Promise<void> = this.#upload(p, take, encodeWav([data], sr, 16))
         .catch((e: unknown) => {
           console.error('take upload failed', e);
           this.emit('upload-error', e);
@@ -310,6 +309,15 @@ export class RecordSession extends Emitter<SessionEvents> {
     return made.map((m) => m.take);
   }
 }
+
+/** Sends a recorded take (16-bit WAV) to wherever takes are kept. */
+export type TakeUploader = (project: Project, take: RecordedTake, wav: Blob) => Promise<void>;
+
+/** The studio's uploader: the take file goes into the project folder. */
+export const uploadToProject: TakeUploader = async (project, take, wav) => {
+  const r = await fetch(`/api/projects/${project.id}/takes/${take.file}`, { method: 'POST', body: wav });
+  if (!r.ok) throw new Error(`upload ${r.status}`);
+};
 
 /** put an existing take back on the timeline (comping): replaces whatever is on its region */
 export function applyTake(store: ProjectStore, trackId: string, takeId: string): void {

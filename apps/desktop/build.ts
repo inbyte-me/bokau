@@ -25,6 +25,17 @@ await build({
   banner: { js: "import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);" },
 });
 await build({ ...common, entryPoints: [path.join(here, 'src/preload.ts')], outfile: path.join(out, 'preload.cjs'), format: 'cjs' });
+// the "OpenRouter key" window: its own preload, page and script
+await build({ ...common, entryPoints: [path.join(here, 'src/preload-key.ts')], outfile: path.join(out, 'preload-key.cjs'), format: 'cjs' });
+await build({
+  ...common,
+  platform: 'browser',
+  target: 'chrome140',
+  entryPoints: [path.join(here, 'src/key-window.ts')],
+  outfile: path.join(out, 'key.js'),
+  format: 'iife',
+});
+fs.copyFileSync(path.join(here, 'src/key.html'), path.join(out, 'key.html'));
 
 const repo = path.resolve(here, '..', '..');
 fs.cpSync(path.join(repo, 'packages/db/drizzle'), path.join(out, 'drizzle'), { recursive: true });

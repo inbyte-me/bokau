@@ -30,7 +30,7 @@ test('create a podcast project from the library without any file', async () => {
   await page.waitForSelector('#empty');
   await page.click('#new-project');
   await page.waitForSelector('.mode[data-mode="podcast"]');
-  assert.equal(await page.$$eval('.mode', (m) => m.length), 3, 'Pro, Party and Podcast');
+  assert.equal(await page.$$eval('.mode', (m) => m.length), 2, 'Dubbing and Podcast (a party starts from a library clip)');
   await page.click('.mode[data-mode="podcast"]');
   await page.click('#np-create');
   await page.waitForSelector('#pod-rec', { timeout: 20000 });
@@ -99,7 +99,7 @@ test('review: play, trim with the buttons, edit chapters', async () => {
   assert.equal((await proj()).podcast.chapters.length, 2);
   await page.$eval('#pod-chapters input', (e: HTMLInputElement) => {
     e.value = 'Welcome';
-    e.dispatchEvent(new Event('change'));
+    e.dispatchEvent(new Event('change', { bubbles: true })); // as a real change event (Svelte delegates it);
   });
   assert.equal((await proj()).podcast.chapters[0].title, 'Welcome');
 });

@@ -133,3 +133,12 @@ export function safeJoin(base: string, rel: string): string {
   if (f !== root && !f.startsWith(root + path.sep)) throw new AppError(403, 'forbidden');
   return f;
 }
+
+/** A file name from a request, reduced to safe characters. */
+export const safeFileName = (s: unknown): string =>
+  String(s || '')
+    .normalize('NFKD')
+    .replace(/[^\w.\- ]+/g, '')
+    .trim()
+    .replace(/\s+/g, '_')
+    .slice(0, 80);

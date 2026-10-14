@@ -1,6 +1,6 @@
 /** Background work on the server (ingest, stems, export) is reported as a job the client polls. */
 export type JobStatus = 'running' | 'done' | 'error';
-export type JobKind = 'ingest' | 'stems' | 'export' | 'podcast-export';
+export type JobKind = 'ingest' | 'stems' | 'export' | 'podcast-export' | 'sound';
 
 export interface Job<R = unknown> {
   id: string;

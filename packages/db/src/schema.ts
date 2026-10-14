@@ -41,6 +41,18 @@ export const aiCalls = sqliteTable('ai_calls', {
   tokens: integer().notNull().default(0),
 });
 
+/**
+ * Background audio for party rooms: the waiting phones play it (loud, in headphones) so nobody hears the
+ * player recording their line. Files live in `<dataDir>/sounds/<id>.m4a`.
+ */
+export const sounds = sqliteTable('sounds', {
+  id: text().primaryKey(),
+  name: text().notNull(),
+  /** seconds */
+  duration: real().notNull(),
+  createdAt: text('created_at').notNull(),
+});
+
 /** Small key/value facts about this installation (e.g. that the legacy JSON files were imported). */
 export const meta = sqliteTable('meta', {
   key: text().primaryKey(),

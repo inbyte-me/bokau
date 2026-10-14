@@ -53,11 +53,14 @@ export const REGIONS: Region[] = [
   { selector: '.tl-toolbar', contract: 'fit', why: 'Tools wrap; the hint text is the first thing to go.' },
   { selector: '.tl-scroll', contract: 'scroll', why: 'Any number of voice tracks: lanes scroll vertically inside the timeline band.' },
 
-  // ---- party / TV
-  { selector: '.party', contract: 'screen', why: 'Holds one party screen at a time.' },
-  { selector: '.party-body', contract: 'page', why: 'Setup screens are short forms, read top to bottom from the sofa; they may scroll on small windows.' },
-  { selector: '.party-stage', contract: 'clip', why: 'While performing, picture and lyrics fill the screen; nothing should scroll mid-take.' },
-  { selector: '.party-stage > .col:last-child', contract: 'scroll', why: 'Controls column beside the picture; scrolls inside if the window is short.' },
+  // ---- party room (TV host, Svelte: styles scoped in features/party/host)
+  { selector: '.party-room', contract: 'screen', stacked: 'page', why: 'The party room: the header with how to join, then one screen of the show at a time.' },
+  { selector: '.room-main', contract: 'scroll', stacked: 'fit', why: 'One step of the show at a time; a long clip grid scrolls inside, the header stays put.' },
+  { selector: '.round', contract: 'screen', stacked: 'page', why: 'A party round from the library: the picture beside who played; stacks on narrow windows.' },
+  { selector: '.room-header', contract: 'fit', why: 'The party room bar: steps and how to join; wraps on narrow windows.' },
+  { selector: '.show-stage', contract: 'clip', why: 'The finished dub is letterboxed into the space left by the buttons.' },
+  { selector: '#sounds', contract: 'fit', why: 'A short list of background tracks inside the library page.' },
+
   { selector: '.stage-box', contract: 'clip', why: 'The picture frame in party and podcast screens: letterboxed video.' },
 
   // ---- podcast

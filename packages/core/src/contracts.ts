@@ -47,3 +47,12 @@ export interface RewriteResult {
   costUsd: number;
   notice: string | null;
 }
+
+/** A background track in the sound library (`GET /api/sounds`); served at `url`. */
+export interface Sound {
+  id: string;
+  name: string;
+  duration: number;
+  createdAt: string;
+  url: string;
+}

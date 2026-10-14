@@ -3,14 +3,16 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { type App, createApp } from '@doblaje/api';
-import { app, BrowserWindow, dialog, session, shell, systemPreferences } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, session, shell, systemPreferences } from 'electron';
 import { installMenu } from './menu.ts';
 import { resolvePaths } from './paths.ts';
+import { hint, KeyStore } from './secrets.ts';
 
 const SMOKE = process.env.DOBLAJE_SMOKE === '1'; // used by the e2e smoke test: start, load, report, quit
 
 let backend: App | null = null;
 let win: BrowserWindow | null = null;
+let keyWin: BrowserWindow | null = null;
 
 if (SMOKE) {
   // isolated profile: a smoke run must not collide with (or be blocked by) a running copy of the app
@@ -26,12 +28,16 @@ app.on('second-instance', () => {
 async function start(): Promise<void> {
   const paths = resolvePaths(app);
   fs.mkdirSync(paths.dataDir, { recursive: true });
+  const keys = new KeyStore(app.getPath('userData'));
   backend = await createApp({
     host: '127.0.0.1',
     port: 0,
     dataDir: paths.dataDir,
     modelsDir: paths.modelsDir,
     webDir: paths.webDir,
+    playDir: fs.existsSync(paths.playDir) ? paths.playDir : null,
+    // the environment wins; otherwise the key saved from File → OpenRouter Key…
+    ai: { apiKey: () => process.env.OPENROUTER_API_KEY || keys.get() },
     migrationsDir: paths.migrationsDir,
     vendorDirs: paths.vendorDirs,
     toolsDir: paths.toolsDir,
@@ -53,7 +59,8 @@ async function start(): Promise<void> {
     await systemPreferences.askForMediaAccess('microphone').catch(() => false);
   }
 
-  installMenu(() => win);
+  installKeyWindow(keys);
+  installMenu(() => win, { openKeyWindow });
   win = new BrowserWindow({
     width: 1440,
     height: 900,
@@ -94,6 +101,63 @@ async function start(): Promise<void> {
     );
     app.quit();
   }
+}
+
+/** File → OpenRouter Key…: a small separate window with its own preload, so the key never passes through the app page. */
+function openKeyWindow(): void {
+  if (keyWin) {
+    keyWin.focus();
+    return;
+  }
+  keyWin = new BrowserWindow({
+    width: 480,
+    height: 250,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    parent: win ?? undefined,
+    modal: process.platform !== 'darwin' && !!win,
+    title: 'OpenRouter Key',
+    backgroundColor: '#121211',
+    webPreferences: { preload: path.join(import.meta.dirname, 'preload-key.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false },
+  });
+  keyWin.removeMenu();
+  keyWin.webContents.on('will-navigate', (e) => e.preventDefault());
+  keyWin.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  keyWin.on('closed', () => {
+    keyWin = null;
+  });
+  void keyWin.loadFile(path.join(import.meta.dirname, 'key.html'));
+}
+
+function installKeyWindow(keys: KeyStore): void {
+  const fromKeyWindow = (e: Electron.IpcMainInvokeEvent | Electron.IpcMainEvent) => !!keyWin && e.sender === keyWin.webContents;
+  const changed = () => win?.webContents.send('menu-command', 'ai-changed');
+  ipcMain.handle('key:status', (e) => {
+    if (!fromKeyWindow(e)) throw new Error('forbidden');
+    const env = process.env.OPENROUTER_API_KEY || '';
+    const saved = keys.get();
+    return { source: env ? 'env' : saved ? 'saved' : 'none', hint: hint(env || saved), canSave: keys.available };
+  });
+  ipcMain.handle('key:save', (e, key: unknown) => {
+    if (!fromKeyWindow(e)) throw new Error('forbidden');
+    try {
+      keys.set(String(key));
+      changed();
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  });
+  ipcMain.handle('key:clear', (e) => {
+    if (!fromKeyWindow(e)) throw new Error('forbidden');
+    keys.clear();
+    changed();
+    return { ok: true };
+  });
+  ipcMain.on('key:close', (e) => {
+    if (fromKeyWindow(e)) keyWin?.close();
+  });
 }
 
 app

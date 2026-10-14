@@ -34,38 +34,13 @@ const P: Record<string, [string, ('fill' | 'mix')?]> = {
   home: ['M2.5 8L8 3l5.5 5M4 7v6.5h3V10h2v3.5h3V7'],
   scissors: ['M8 1.5v13M4 5.5h3M9 10.5h3'],
   up: ['M8 13V3M4 7l4-4 4 4'],
+  edit: ['M3 13l.8-3.2L10.8 2.8l2.4 2.4-7 7zM9.5 4l2.5 2.5'],
   gear: ['M8 5.5a2.5 2.5 0 100 5 2.5 2.5 0 000-5zM8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4'],
 };
-const NS = 'http://www.w3.org/2000/svg';
 export type IconName = keyof typeof P;
 
-export function icon(name: string, size = 16): SVGSVGElement {
+/** The path and drawing mode of an icon (unknown names draw the close cross). Used by Icon.svelte too. */
+export function iconPath(name: string): { d: string; mode: 'stroke' | 'fill' | 'mix' } {
   const [d, mode] = P[name] || P.close;
-  const svg = document.createElementNS(NS, 'svg');
-  svg.setAttribute('viewBox', '0 0 16 16');
-  svg.setAttribute('width', String(size));
-  svg.setAttribute('height', String(size));
-  svg.setAttribute('aria-hidden', 'true');
-  svg.classList.add('ic');
-  const path = document.createElementNS(NS, 'path');
-  path.setAttribute('d', d);
-  if (mode === 'fill') {
-    path.setAttribute('fill', 'currentColor');
-    path.setAttribute('stroke', 'none');
-  } else {
-    path.setAttribute('fill', mode === 'mix' ? 'currentColor' : 'none');
-    path.setAttribute('stroke', 'currentColor');
-    path.setAttribute('stroke-width', '1.5');
-    path.setAttribute('stroke-linecap', 'round');
-    path.setAttribute('stroke-linejoin', 'round');
-  }
-  svg.append(path);
-  return svg;
-}
-/** icon + text label as one inline node */
-export function lbl(name: string, text: string, size = 15): HTMLSpanElement {
-  const s = document.createElement('span');
-  s.className = 'lbl';
-  s.append(icon(name, size), document.createTextNode(text));
-  return s;
+  return { d, mode: mode ?? 'stroke' };
 }

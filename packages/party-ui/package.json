@@ -1,0 +1,25 @@
+{
+  "name": "@doblaje/party-ui",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Party screens shared by every client of a room (the TV, a phone host, a phone player): what each game is, the languages, the host's controls. Components take plain props: no host context, no API.",
+  "exports": {
+    "./components/*": "./src/components/*",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@doblaje/core": "workspace:*",
+    "@doblaje/party": "workspace:*",
+    "@doblaje/ui": "workspace:*"
+  },
+  "peerDependencies": {
+    "svelte": "^5.0.0"
+  },
+  "devDependencies": {
+    "svelte": "catalog:"
+  }
+}

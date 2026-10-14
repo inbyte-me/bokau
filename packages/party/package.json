@@ -1,0 +1,17 @@
+{
+  "name": "@doblaje/party",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Party rooms: the game's state machine, casting and turn director, wire protocol. Isomorphic, no I/O.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json && tsc -p test/tsconfig.json"
+  },
+  "dependencies": {
+    "@doblaje/core": "workspace:*"
+  }
+}

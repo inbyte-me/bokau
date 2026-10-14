@@ -39,7 +39,10 @@ export class Engine extends Emitter<EngineEvents> {
   /** seconds; positive delays the picture */
   avOffset = 0;
   muteOriginal = false;
+  /** override where project media is fetched from (default `/media/<id>/<file>`) */
+  mediaUrl: ((projectId: string, file: string) => string) | null = null;
   #raf = 0;
+  #backup: ReturnType<typeof setInterval> | undefined;
   #duration = 0;
   #lastOpts: PlayOptions | undefined;
 
@@ -74,7 +77,8 @@ export class Engine extends Emitter<EngineEvents> {
       video.muted = true;
       video.playsInline = true;
     }
-    const assets = new Assets(ctx, project.id);
+    const mediaUrl = this.mediaUrl;
+    const assets = new Assets(ctx, project.id, mediaUrl ? (name) => mediaUrl(project.id, name) : undefined);
     this.assets = assets;
     await assets.loadOriginal();
     if (project.stems?.status === 'ready') {
@@ -154,6 +158,7 @@ export class Engine extends Emitter<EngineEvents> {
     this.handle?.stop();
     this.handle = null;
     cancelAnimationFrame(this.#raf);
+    clearInterval(this.#backup);
     if (this.video) {
       this.video.pause();
       this.video.playbackRate = 1;
@@ -174,7 +179,8 @@ export class Engine extends Emitter<EngineEvents> {
 
   seek(tIn: number): void {
     const t = clamp(tIn, 0, this.#duration);
-    if (this.playing) void this.playAt(t, undefined, this.#lastOpts);
+    // seeking inside a range keeps its end (a punch-in or an audition must not run to the end of the clip)
+    if (this.playing) void this.playAt(t, undefined, { ...this.#lastOpts, ...(this.endAt != null ? { to: this.endAt } : {}) });
     else {
       this.t0 = t;
       this.#showFrame(t);
@@ -213,10 +219,16 @@ export class Engine extends Emitter<EngineEvents> {
     }, delay);
   }
 
+  /**
+   * Per-frame updates while playing (time, video sync, end of range). Animation frames stop in hidden tabs (a phone
+   * with its screen off, a background window), so a slow timer runs the same check: a range always ends.
+   */
   #loop() {
     cancelAnimationFrame(this.#raf);
-    const tick = () => {
-      if (!this.playing) return;
+    clearInterval(this.#backup);
+    /** one update; false once playback stopped or the range ended */
+    const step = (): boolean => {
+      if (!this.playing) return false;
       const t = this.time;
       this.emit('time', t);
       const v = this.video;
@@ -231,17 +243,27 @@ export class Engine extends Emitter<EngineEvents> {
         else if (v.playbackRate !== 1) v.playbackRate = 1;
       }
       if (this.endAt != null && t >= this.endAt - 0.005) {
+        cancelAnimationFrame(this.#raf);
+        clearInterval(this.#backup);
         this.emit('ended', t);
         if (this.playing && t >= this.#duration - 0.005) {
           this.pause();
           this.t0 = this.#duration;
           this.emit('time', this.t0);
         }
-        return;
+        return false;
       }
-      this.#raf = requestAnimationFrame(tick);
+      return true;
     };
-    this.#raf = requestAnimationFrame(tick);
+    const frame = () => {
+      if (step()) this.#raf = requestAnimationFrame(frame);
+      else clearInterval(this.#backup);
+    };
+    this.#raf = requestAnimationFrame(frame);
+    // hidden tabs get no animation frames: keep time and the end of range going
+    this.#backup = setInterval(() => {
+      if (document.hidden && !step()) clearInterval(this.#backup);
+    }, 200);
   }
 
   /** play only a range then stop (audition a take, loop playback). Resolves when done. */

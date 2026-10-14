@@ -9,15 +9,18 @@ Three thin **shells** compose shared **packages**:
              └──────────────────┬───────────────────┘     │  BrowserWindow → http://127.0.0.1:port   │
                                 │                         └───────────────────┬──────────────────────┘
                                 ▼                                             ▼
-   @doblaje/api ── router, routes, jobs, static + media serving, Host/Origin guard
+   @doblaje/api ── router, routes, jobs, static + media serving, Host/Origin guard, party hub
+      │            (+ HTTPS party listener on the LAN for phones: /play, player routes, /party/ws)
       ├── @doblaje/db     SQLite (node:sqlite) + Drizzle: projects, ai_calls, meta
       ├── @doblaje/media  ffmpeg: ingest, stems (centre-cut / 5.1 / Demucs), export, podcast
       └── @doblaje/ai     OpenRouter client + spend ledger, prompts, offline generators
                                 ▲  HTTP (same origin)
-   apps/web (Vite) ── router, store (undo/autosave), app singleton, feature screens
+   apps/web (Vite + Svelte) ── router, store (undo/autosave), feature screens, party room (TV)
+   apps/play (Vite + Svelte) ── phone client for party rooms (served at /play/)
       ├── @doblaje/audio  Web Audio engine: transport, mix graph, FX, worklets, mic, recording
       ├── @doblaje/speech Whisper + voice embeddings in a worker (transformers.js, WASM)
-      └── @doblaje/ui     h() DOM helper, icons, i18n
+      ├── @doblaje/party  room state machine, casting, protocol, PartyClient (also used by the server)
+      └── @doblaje/ui     Svelte components, tokens, icons, i18n, menus
    @doblaje/core ── shared by all: project model + types, HTTP contracts, SRT, syllables, diarization
 ```
 

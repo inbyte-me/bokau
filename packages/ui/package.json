@@ -5,6 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./tokens.css": "./src/tokens.css",
+    "./components/*": "./src/components/*",
     "./*": "./src/*.ts"
   },
   "scripts": {
@@ -12,5 +14,11 @@
   },
   "dependencies": {
     "@doblaje/core": "workspace:*"
+  },
+  "peerDependencies": {
+    "svelte": "^5.0.0"
+  },
+  "devDependencies": {
+    "svelte": "catalog:"
   }
 }

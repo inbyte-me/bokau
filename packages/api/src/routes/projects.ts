@@ -16,17 +16,10 @@ import {
   separateStems,
 } from '@doblaje/media';
 import type { AppContext } from '../context.ts';
-import { readBody, readJson, streamToFile } from '../http.ts';
+import { readBody, readJson, safeFileName, streamToFile } from '../http.ts';
 import { type Router, reply } from '../router.ts';
 
 const SOURCE_EXT = /^\.(mp4|webm|mov|mkv|m4v|avi|mp3|wav|m4a|ogg|flac)$/;
-const safeFileName = (s: unknown) =>
-  String(s || '')
-    .normalize('NFKD')
-    .replace(/[^\w.\- ]+/g, '')
-    .trim()
-    .replace(/\s+/g, '_')
-    .slice(0, 80);
 
 export function projectRoutes(r: Router, ctx: AppContext): void {
   const { cfg, projects, jobs } = ctx;

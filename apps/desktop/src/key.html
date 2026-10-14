@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'" />
+    <title>OpenRouter Key</title>
+    <style>
+      :root { color-scheme: light dark; --bg: #f4f3f0; --fg: #1d1c1a; --muted: #6b6862; --line: #d8d5cf; --accent: #c8452c; }
+      @media (prefers-color-scheme: dark) { :root { --bg: #121211; --fg: #ecebe8; --muted: #9a968f; --line: #34322f; } }
+      body { margin: 0; padding: 20px; background: var(--bg); color: var(--fg); font: 14px/1.45 -apple-system, system-ui, sans-serif; }
+      h1 { font-size: 16px; margin: 0 0 6px; }
+      p { margin: 0 0 12px; color: var(--muted); }
+      input { box-sizing: border-box; width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: inherit; font: 13px ui-monospace, monospace; }
+      .row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
+      button { padding: 6px 14px; border-radius: 6px; border: 1px solid var(--line); background: transparent; color: inherit; font: inherit; }
+      button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+      #msg { min-height: 1.4em; margin-top: 8px; font-size: 13px; }
+      #msg.error { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <h1>OpenRouter key</h1>
+    <p id="state">Checking…</p>
+    <input id="key" type="password" placeholder="sk-or-…" autocomplete="off" spellcheck="false" />
+    <div id="msg" role="status"></div>
+    <div class="row">
+      <button id="clear" type="button">Remove key</button>
+      <button id="cancel" type="button">Close</button>
+      <button id="save" type="button" class="primary">Save</button>
+    </div>
+    <script src="key.js"></script>
+  </body>
+</html>

@@ -1,10 +1,8 @@
 // Saving you can see and control. Projects autosave 0.7 s after each edit; on top of that the user can save at any
-// moment (save button, File → Save, ⌘/Ctrl+S), and the top bar always says where things stand.
-import { h, icon, showMenu, t, toast } from '@doblaje/ui';
-import { app } from '../app.ts';
-import type { SaveState } from '../store.ts';
-
-const clock = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+// moment (the save button in the top bar, File → Save, ⌘/Ctrl+S). The top bar shows where things stand
+// (shell/SaveControls.svelte).
+import { t, toast } from '@doblaje/ui';
+import { app } from '../app.svelte.ts';
 
 /** Save now, with feedback. Returns whether the server confirmed. */
 export async function saveNow(): Promise<boolean> {
@@ -14,71 +12,20 @@ export async function saveNow(): Promise<boolean> {
   return ok;
 }
 
-/** Status text + save button for the top bar of any open project. */
-export function saveControls(): { el: HTMLElement; destroy(): void } {
-  const status = h('span.savestate#save-state', { role: 'status', 'aria-live': 'polite' });
-  const btn = h('button.icon#save-btn', { title: `${t('Save')} (⌘/Ctrl+S)`, onclick: () => void saveNow() }, icon('save'));
-  const render = (s: SaveState = app.store.saveState) => {
-    const last = app.store.lastSavedAt;
-    status.textContent =
-      s === 'saving'
-        ? t('Saving…')
-        : s === 'dirty'
-          ? t('Unsaved changes')
-          : s === 'error'
-            ? t('Save failed')
-            : last
-              ? t('Saved {time}', { time: clock(last) })
-              : t('Saved');
-    status.dataset.state = s;
-    btn.classList.toggle('attention', s === 'error' || s === 'dirty');
-  };
-  const off = app.store.on('save-state', render);
-  render();
-  return { el: h('div.save-controls', btn, status), destroy: off };
-}
-
 // ---------------------------------------------------------------- File menu
 export interface FileActions {
   export?: () => void;
 }
-let fileActions: FileActions = {};
+let current: FileActions = {};
 /** Screens register what File offers for them (e.g. Export); returns the unregister function. */
 export function setFileActions(a: FileActions): () => void {
-  fileActions = a;
+  current = a;
   return () => {
-    if (fileActions === a) fileActions = {};
+    if (current === a) current = {};
   };
 }
-
-export function fileMenuButton(go: (path: string) => void): HTMLElement {
-  const btn: HTMLButtonElement = h(
-    'button.ghost#file-menu',
-    {
-      'aria-haspopup': 'menu',
-      onclick: () => {
-        const r = btn.getBoundingClientRect();
-        const open = !!app.store.current;
-        showMenu(
-          [
-            { label: t('New project…'), icon: 'plus', run: () => go('/new') },
-            { label: t('Open…'), icon: 'file', run: () => go('/') },
-            'separator',
-            { label: t('Save'), icon: 'save', shortcut: '⌘S', disabled: !open, run: () => void saveNow() },
-            ...(fileActions.export ? [{ label: t('Export…'), icon: 'export', run: fileActions.export }] : []),
-            'separator',
-            { label: t('Close project'), icon: 'close', disabled: !open, run: () => go('/') },
-          ],
-          r.left,
-          r.bottom + 2,
-          { label: t('File') },
-        );
-      },
-    },
-    t('File'),
-  );
-  return btn;
-}
+/** What File offers on the current screen. */
+export const fileActions = (): FileActions => current;
 
 /** ⌘/Ctrl+S everywhere (also while typing), and the desktop app's native File menu. Installed once by the shell. */
 export function installSaveShortcuts(go: (path: string) => void): void {
@@ -95,9 +42,10 @@ export function installSaveShortcuts(go: (path: string) => void): void {
   );
   window.doblajeDesktop?.onMenuCommand?.((cmd) => {
     if (cmd === 'save') void saveNow();
-    else if (cmd === 'export') fileActions.export?.();
+    else if (cmd === 'export') current.export?.();
     else if (cmd === 'new') go('/new');
     else if (cmd === 'open' || cmd === 'close') go('/');
+    else if (cmd === 'ai-changed') window.dispatchEvent(new Event('doblaje:ai-changed'));
   });
   // leaving with changes the server has not confirmed: ask first (autosave usually got there already)
   window.addEventListener('beforeunload', (e) => {

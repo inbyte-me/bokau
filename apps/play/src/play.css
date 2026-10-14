@@ -1,0 +1,419 @@
+/* Phone app: one column, thumb-sized controls, safe areas respected. Tokens come from @doblaje/ui. */
+@import "@doblaje/ui/tokens.css";
+
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px / 1.4 var(--font);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+#app {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+.phone {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  max-width: 560px;
+  width: 100%;
+  margin: 0 auto;
+}
+.screen {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.screen.center {
+  justify-content: center;
+  text-align: center;
+}
+.screen header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--dim);
+  font-size: 0.9rem;
+}
+.screen footer {
+  margin-top: auto;
+  display: flex;
+  justify-content: center;
+}
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: var(--text);
+}
+.brand .dot,
+.rec .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--signal);
+}
+h1 {
+  font-family: var(--display);
+  font-size: 2.2rem;
+  line-height: 1.05;
+  margin: 8px 0 0;
+}
+.lead {
+  color: var(--dim);
+  margin: 0;
+}
+.eyebrow {
+  margin: 8px 0 0;
+  color: var(--faint);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.8rem;
+}
+.error {
+  color: var(--signal-text);
+  margin: 0;
+}
+.ok {
+  color: var(--ok);
+}
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--dim);
+  font-size: 0.9rem;
+}
+input {
+  background: var(--panel2);
+  border: 1px solid var(--line2);
+  border-radius: 10px;
+  padding: 14px;
+  font-size: 1.1rem;
+}
+input.code {
+  font-family: var(--mono);
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  font-size: 1.6rem;
+  text-align: center;
+}
+input.small {
+  padding: 4px 8px;
+  font-size: 0.9rem;
+  width: 5em;
+}
+button {
+  border: 1px solid var(--line2);
+  background: var(--panel2);
+  border-radius: 12px;
+  padding: 10px 16px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+button:disabled {
+  opacity: 0.45;
+}
+button.big {
+  min-height: 56px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  width: 100%;
+}
+button.primary {
+  background: var(--signal);
+  border-color: var(--signal);
+  color: #fff;
+}
+button.ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--dim);
+}
+.banner {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  margin: -4px 0 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--panel3);
+  color: var(--dim);
+  text-align: center;
+}
+.banner.error {
+  color: var(--signal-text);
+}
+.people,
+.cast {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.people li,
+.cast li {
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 12px;
+}
+.cast li span {
+  color: var(--dim);
+  margin-left: 4px;
+}
+.people li.away {
+  opacity: 0.5;
+}
+.parts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.who {
+  font-size: 3rem;
+}
+.timer {
+  font-size: 2.4rem;
+  margin: 0;
+}
+.progress {
+  color: var(--faint);
+  margin: 0;
+}
+
+/* my turn: video on top, the line big, actions at the thumb */
+.turn .timer {
+  font-size: 1.4rem;
+}
+.stage {
+  position: relative;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #000;
+  aspect-ratio: 16 / 9;
+  flex: none;
+}
+.stage video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+.stage .count {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font: 700 5rem var(--display);
+  background: rgb(0 0 0 / 0.45);
+}
+.stage .rec {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 0.6);
+  font-weight: 600;
+}
+.script {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-wrap: anywhere;
+}
+.script .other {
+  margin: 0;
+  white-space: pre-line; /* a turn's lines, one per row */
+  color: var(--faint);
+  font-size: 0.95rem;
+}
+.script .mine {
+  margin: 0;
+  white-space: pre-line;
+  font-size: 1.6rem;
+  line-height: 1.25;
+  font-weight: 600;
+  color: var(--cue);
+  border-left: 4px solid var(--c);
+  padding-left: 12px;
+}
+.actions {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ambience-start {
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  min-height: 52px;
+  z-index: 10;
+}
+.ambience-none {
+  color: var(--faint);
+  text-align: center;
+}
+
+/* test phones (grid.html) */
+.grid-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  gap: 12px;
+}
+.grid-page header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.grid-page label {
+  flex-direction: row;
+  align-items: center;
+}
+.frames {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px;
+}
+.frames iframe {
+  width: 100%;
+  height: 680px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--bg);
+}
+.script .said {
+  color: var(--text);
+  font-style: italic;
+}
+.script .suggestion {
+  margin: 0;
+  font-size: 1.15rem;
+  color: var(--text);
+  background: var(--panel2);
+  border: 1px dashed var(--line2);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.script .suggestion .tag {
+  color: var(--ok);
+  font-weight: 600;
+  margin-right: 4px;
+}
+.script .free {
+  margin: 0;
+  color: var(--faint);
+  font-size: 0.85rem;
+}
+.turn.intro .kicker {
+  margin: 0;
+  color: var(--faint);
+  font-size: 0.8rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.turn.intro h1 {
+  margin: 0;
+}
+/* how the previous player ended: their words in their colour, pulsing while it plays */
+.turn.intro .ending {
+  border-left: 6px solid var(--c, var(--line2));
+  background: var(--panel2);
+  border-radius: 10px;
+  padding: 18px 16px;
+}
+.turn.intro .ending .words {
+  margin: 0;
+  font: 600 1.6rem / 1.25 var(--display);
+  color: var(--cue);
+}
+.turn.intro .ending .words.dim {
+  color: var(--faint);
+  font: 1rem var(--sans, inherit);
+}
+.turn.intro .ending.playing {
+  animation: ending-pulse 1s ease-in-out infinite alternate;
+}
+@keyframes ending-pulse {
+  to {
+    background: var(--panel3, var(--panel2));
+    border-left-width: 12px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .turn.intro .ending.playing {
+    animation: none;
+  }
+}
+.turn.intro .free {
+  margin: 0;
+  color: var(--faint);
+}
+
+/* your colour: the same one the TV uses for your turns and your track */
+#room-screen {
+  border-top: 6px solid var(--me, var(--signal));
+  margin-top: -16px;
+  padding-top: 14px;
+}
+.me-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.me-card h1 {
+  margin: 0;
+}
+.me-card .initial {
+  flex: none;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--me, var(--signal));
+  color: #121211;
+  font: 700 1.6rem var(--display);
+}
+
+/* a character's card (voice and personality), on the cast reveal and above the line to record */
+.card,
+.persona {
+  margin: 0;
+  color: var(--dim);
+  border-left: 4px solid var(--c, var(--line2));
+  padding-left: 10px;
+  overflow-wrap: anywhere;
+}
+.persona b {
+  color: var(--text);
+}

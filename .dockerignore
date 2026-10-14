@@ -1,0 +1,15 @@
+node_modules
+**/node_modules
+**/dist
+data
+models
+tools
+.cache
+.git
+.env
+.env.*
+!.env.example
+apps/desktop/release
+e2e
+*.mp4
+*.mov

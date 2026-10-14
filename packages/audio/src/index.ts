@@ -10,5 +10,5 @@ export { buildMix, type MixHandle, type MixInclude, type MixOptions } from './mi
 export { computePeaks, drawWave, type Peaks, rmsEnvelope } from './peaks.ts';
 export { FFT, PitchShifterCore } from './pitch-core.ts';
 export { peakOf, renderAndUpload, renderStem, SAMPLE_RATE, type StemKind } from './render.ts';
-export { applyTake, type ProjectStore, type RecordedTake, RecordSession, type SessionState } from './session.ts';
+export { applyTake, type ProjectStore, type RecordedTake, RecordSession, type SessionState, type TakeUploader, uploadToProject } from './session.ts';
 export { audioBufferToWav, encodeWav } from './wav.ts';

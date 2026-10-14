@@ -1,26 +1,7 @@
 /* Doblaje Studio — a dubbing booth, not a dashboard.
    Graphite surfaces, one signal red for "now" (sync line, playhead, record), amber only for cue text.
    Contrast (WCAG): text 14.6:1, secondary 7.2:1, hints 4.9:1, white on signal 4.75:1, amber 8.9:1. */
-:root {
-  --bg: #121211;
-  --panel: #181817;
-  --panel2: #1f1f1d;
-  --panel3: #2a2a27;
-  --line: #34332f;
-  --line2: #46453f;
-  --text: #ebe9e4;
-  --dim: #a8a59c;
-  --faint: #8a877e;
-  --signal: #d4392c;
-  --signal-text: #f0604f;
-  --cue: #e3b04b;
-  --ok: #8bc1a0;
-  --ui: 1;
-  --font: -apple-system, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
-  --display: "Avenir Next Condensed", "Helvetica Neue", "Arial Narrow", system-ui, sans-serif;
-  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  color-scheme: dark;
-}
+@import "@doblaje/ui/tokens.css";
 * {
   box-sizing: border-box;
 }
@@ -67,6 +48,8 @@ textarea {
 }
 
 /* controls */
+/* a <label> wrapping a file input looks and works like a button (no ref needed to open the picker) */
+label.button,
 button {
   cursor: pointer;
   background: var(--panel3);
@@ -79,6 +62,7 @@ button {
   justify-content: center;
   gap: 0.45em;
 }
+label.button:hover,
 button:hover:not(:disabled) {
   background: #34342f;
   border-color: #5a5951;
@@ -86,9 +70,13 @@ button:hover:not(:disabled) {
 button:active:not(:disabled) {
   background: #3d3d37;
 }
-button:disabled {
+button:disabled,
+label.button.disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+label.button:focus-within {
+  outline: 2px solid var(--signal);
 }
 button.primary {
   background: var(--text);
@@ -307,71 +295,6 @@ kbd {
   color: var(--signal-text);
 }
 
-/* library: a file list, not a poster wall */
-.library {
-  padding: 1.6rem 2rem;
-  overflow: auto;
-  flex: 1;
-  max-width: 70rem;
-  width: 100%;
-  margin: 0 auto;
-}
-.library h1 {
-  margin: 0;
-  font-size: 1.5rem;
-  font-weight: 650;
-}
-.hero {
-  display: flex;
-  align-items: flex-end;
-  gap: 1rem;
-  margin-bottom: 1rem;
-  padding-bottom: 1rem;
-  border-bottom: 1px solid var(--line);
-}
-.plist {
-  width: 100%;
-  border-collapse: collapse;
-}
-.plist th {
-  text-align: left;
-  font-size: 0.8em;
-  font-weight: 600;
-  color: var(--faint);
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  padding: 0.4rem 0.6rem;
-  border-bottom: 1px solid var(--line);
-}
-.plist td {
-  padding: 0.5rem 0.6rem;
-  border-bottom: 1px solid var(--line);
-  vertical-align: middle;
-}
-.plist tr.card {
-  cursor: pointer;
-}
-.plist tr.card:hover td {
-  background: var(--panel);
-}
-.plist tr.card:focus-visible {
-  outline-offset: -2px;
-}
-.plist .thumb {
-  width: 96px;
-  height: 54px;
-  background: #000 center / cover;
-  display: block;
-}
-.plist td.num {
-  font-family: var(--mono);
-  font-variant-numeric: tabular-nums;
-  color: var(--dim);
-  text-align: right;
-}
-.plist .name {
-  font-weight: 600;
-}
 .badge {
   font-size: 0.78em;
   font-weight: 600;
@@ -458,18 +381,6 @@ kbd {
 }
 .mode .big {
   display: none;
-}
-.drop {
-  border: 1px dashed var(--line2);
-  padding: 1.3rem;
-  text-align: center;
-  color: var(--dim);
-  cursor: pointer;
-}
-.drop.over,
-.drop:hover {
-  border-color: var(--text);
-  color: var(--text);
 }
 .progress {
   height: 4px;
@@ -1033,110 +944,13 @@ canvas.tl {
 }
 
 /* party / TV (10-foot): large type, left-aligned, keyboard-driven, no card chrome */
-.party {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  background: var(--bg);
-}
-.party-body {
-  flex: 1;
-  min-height: 0;
-  padding: 1.4rem 3.5rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1.1rem;
-  overflow: auto;
-}
-html.tv .party-body {
-  padding: 2rem 5%;
-} /* title-safe margins on TVs that overscan */
-.party h1 {
-  margin: 0;
-  font-family: var(--display);
-  font-size: 2.6rem;
-  font-weight: 700;
-  letter-spacing: 0.005em;
-  line-height: 1.05;
-}
-.party .lead {
-  color: var(--dim);
-  font-size: 1.15rem;
-  max-width: 46rem;
-  margin: 0;
-}
-.running {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  border-top: 1px solid var(--line2);
-}
-.running .item {
-  display: grid;
-  grid-template-columns: 4.2rem 1fr;
-  gap: 1rem;
-  align-items: baseline;
-  width: 100%;
-  text-align: left;
-  background: transparent;
-  border: 0;
-  border-bottom: 1px solid var(--line2);
-  border-radius: 0;
-  padding: 1rem 0.6rem;
-  min-height: 0;
-  justify-content: flex-start;
-}
-.running .item .k {
-  font-family: var(--mono);
-  font-size: 1.6rem;
-  color: var(--faint);
-}
-.running .item h3 {
-  margin: 0;
-  font-family: var(--display);
-  font-size: 2rem;
-  font-weight: 700;
-}
-.running .item p {
-  margin: 0.2rem 0 0;
-  color: var(--dim);
-  font-size: 1.05rem;
-}
-.running .item:hover,
-.running .item:focus-visible {
-  background: var(--panel);
-  outline: none;
-  box-shadow: inset 6px 0 0 var(--signal);
-}
-.running .item:hover .k,
-.running .item:focus-visible .k {
-  color: var(--signal-text);
-}
-.signal-chain {
-  display: flex;
-  gap: 1.2rem;
-  align-items: center;
-  flex-wrap: wrap;
-  padding-top: 0.4rem;
-  color: var(--dim);
-}
+/* title-safe margins on TVs that overscan */
+
 .big-btn {
   font-size: 1.15rem;
   padding: 0.55em 1.3em;
   border-radius: 3px;
   min-height: 2.6em;
-}
-.party-stage {
-  display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr);
-  gap: 1.4rem;
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-}
-.party-stage > .col {
-  min-height: 0;
 }
 .stage-box {
   flex: 1 1 0;
@@ -1151,107 +965,8 @@ html.tv .party-body {
   flex: none;
   height: 300px;
 }
-.party-stage .stage {
-  min-height: 0;
-}
-.player-card {
-  border-left: 4px solid var(--line2);
-  padding: 0.6rem 0.9rem;
-  display: flex;
-  align-items: center;
-  gap: 0.8rem;
-  background: var(--panel);
-}
-.player-card.cur {
-  border-left-color: var(--signal);
-  background: var(--panel2);
-}
-.avatar {
-  width: 1.9em;
-  height: 1.9em;
-  display: grid;
-  place-items: center;
-  font-family: var(--mono);
-  font-weight: 700;
-  color: #111;
-  flex: none;
-}
-.pass-screen {
-  flex: 1;
-  display: grid;
-  align-content: center;
-  justify-items: start;
-  gap: 0.8rem;
-}
-.pass-screen h1 {
-  font-size: 4.2rem;
-}
-.pass-screen .seg {
-  font-family: var(--mono);
-  color: var(--dim);
-  font-size: 1.2rem;
-  letter-spacing: 0.08em;
-}
 /* lower-third: broadcast-style lyrics, current word in cue amber */
-.karaoke {
-  background: #000;
-  border-left: 6px solid var(--cue);
-  padding: 0.8rem 1.4rem;
-  font-family: var(--display);
-  font-size: 2.3rem;
-  font-weight: 700;
-  line-height: 1.18;
-  min-height: 4.4em;
-  display: flex;
-  flex-wrap: wrap;
-  align-content: center;
-  gap: 0.05em 0.32em;
-  flex: none;
-}
-.karaoke .w {
-  color: #fff;
-  opacity: 0.5;
-}
-.karaoke .w.cur {
-  opacity: 1;
-  color: var(--cue);
-}
-.karaoke .w.done {
-  opacity: 1;
-  color: #fff;
-}
-.karaoke .who,
-.karaoke .direction {
-  flex-basis: 100%;
-  font-family: var(--font);
-  font-size: 0.42em;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--dim);
-}
-.karaoke .direction {
-  text-transform: none;
-  letter-spacing: 0;
-  font-style: italic;
-  font-weight: 400;
-  font-size: 0.5em;
-}
-.karaoke.hidden {
-  display: none;
-}
-.drama {
-  height: 14px;
-  background: repeating-linear-gradient(90deg, var(--panel3) 0 14px, transparent 14px 16px);
-  position: relative;
-}
-.drama > i {
-  display: block;
-  height: 100%;
-  background: repeating-linear-gradient(90deg, var(--text) 0 14px, transparent 14px 16px);
-  width: 0;
-  transition: width 0.08s linear;
-}
+
 .stat {
   font-family: var(--mono);
   font-variant-numeric: tabular-nums;
@@ -1269,13 +984,6 @@ html.tv .party-body {
   .side {
     border-left: 0;
     max-height: 40vh;
-  }
-  .party-body {
-    padding: 1rem 1.2rem;
-  }
-  .party-stage {
-    grid-template-columns: 1fr;
-    overflow: auto;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1356,21 +1064,14 @@ body {
   height: 100dvh;
 }
 .studio,
-.party,
 .pod {
   overflow-x: hidden;
   overflow-y: auto; /* screen: only scrolls when its regions cannot fit at their minimum sizes */
 }
-.library,
-.party-body {
-  overflow-x: hidden;
-  overflow-y: auto; /* page */
-}
 .panel,
 .tl-scroll,
 .modal,
-.pod-side,
-.party-stage > .col:last-child {
+.pod-side {
   overflow-x: hidden;
   overflow-y: auto; /* scroll */
   overscroll-behavior: contain;
@@ -1380,7 +1081,6 @@ body {
 .stage,
 .stage-box,
 .timeline,
-.party-stage,
 .pod-stage,
 canvas.band {
   overflow: hidden; /* clip */
@@ -1595,13 +1295,13 @@ canvas.band {
   border-radius: 3px;
   color: var(--dim);
 }
-.prepare-steps .step.done .mark {
-  color: var(--ok);
-  border-color: var(--ok);
-}
 .prepare-steps .step.running .mark {
   color: var(--cue);
   border-color: var(--cue);
+}
+.prepare-steps .step.done .mark {
+  color: var(--ok);
+  border-color: var(--ok);
 }
 .prepare-steps .step.error .mark {
   color: var(--signal-text);
@@ -1653,43 +1353,16 @@ canvas.band {
   flex-wrap: wrap;
   gap: 0.6rem;
 }
-.character-pick {
-  font-size: 1.25rem;
-  padding: 0.7rem 1.2rem;
-  border-left: 8px solid var(--line2);
-  min-width: 10rem;
-  text-align: left;
-}
-button.character-pick.on {
-  background: var(--panel2);
-  color: var(--text);
-  border-color: var(--line2);
-  box-shadow: inset 0 0 0 2px var(--cue);
-  font-weight: 700;
-}
-.pick-poster {
-  width: min(480px, 100%);
-  border: 1px solid var(--line);
-}
-.lib-section {
-  margin-top: 1.6rem;
-}
-.lib-section h2 {
-  font-size: 0.78rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--dim);
-  margin: 0 0 0.3rem;
-}
 .characters {
   display: flex;
   flex-wrap: wrap;
   gap: 0.25rem;
   margin-top: 0.2rem;
 }
-td.derive {
-  white-space: nowrap;
-}
-td.derive button + button {
-  margin-left: 0.3rem;
+.topbar button.brand {
+  background: none;
+  border: none;
+  font: inherit;
+  font-weight: 700;
+  color: inherit;
 }

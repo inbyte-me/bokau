@@ -16,7 +16,7 @@ const pickOption = (page, sel, re) =>
       const o = [...s.options].find((x) => new RegExp(re, 'i').test(x.textContent));
       if (!o) return null;
       s.value = o.value;
-      s.dispatchEvent(new Event('change'));
+      s.dispatchEvent(new Event('change', { bubbles: true })); // as a real change event (Svelte delegates it);
       return o.textContent;
     },
     sel,

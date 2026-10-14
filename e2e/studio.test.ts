@@ -228,16 +228,29 @@ test('loop recording makes one take per pass and the latest is active; older tak
   const p = await project();
   const tr = p.tracks[0];
   assert.ok(tr.takes.length >= 2);
-  assert.equal(tr.clips.length, 1, 'only one take is active on the timeline');
-  assert.equal(tr.clips[0].takeId, tr.takes.at(-1).id, 'latest take active');
+  // stopping during a pass keeps that partial pass too, so count the rule, not the clips: takes never overlap on the
+  // timeline and the latest one is in use
+  const sorted = [...tr.clips].sort((a, b) => a.start - b.start);
+  assert.ok(
+    sorted.every((c, i) => i === 0 || sorted[i - 1].start + sorted[i - 1].duration <= c.start + 1e-6),
+    'no overlapping takes on the timeline',
+  );
+  assert.ok(
+    tr.clips.some((c) => c.takeId === tr.takes.at(-1).id),
+    'latest take active',
+  );
   await page.click('#tab-record');
   await page.waitForSelector('#takes-list .take');
-  const useBtns = await page.$$('#takes-list .take:not(.active) button.use');
-  assert.ok(useBtns.length >= 1);
-  await useBtns[0].click();
+  // any take but the latest (with a partial last pass, older takes can still be partly in use)
+  const older = tr.takes[0].id;
+  assert.notEqual(older, tr.takes.at(-1).id);
+  await page.click(`#takes-list .take[data-take="${older}"] button.use`);
   await wait(200);
   const p2 = await project();
-  assert.notEqual(p2.tracks[0].clips[0].takeId, tr.takes.at(-1).id, 'older take now active');
+  assert.ok(
+    p2.tracks[0].clips.some((c) => c.takeId === older),
+    'the chosen older take is now on the timeline',
+  );
   await page.select('#rec-mode', 'playhead');
 });
 

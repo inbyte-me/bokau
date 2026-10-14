@@ -1,20 +1,7 @@
-import { drawWave, FX_INFO } from '@doblaje/audio';
-import {
-  type Clip,
-  type Cue,
-  clamp,
-  type FxPreset,
-  type Marker,
-  newCue,
-  newId,
-  newTrack,
-  type Project,
-  pickColor,
-  type TimeRange,
-  type Track,
-} from '@doblaje/core';
-import { append, clear, h, icon, t } from '@doblaje/ui';
-import { app } from '../app.ts';
+import { drawWave } from '@doblaje/audio';
+import { type Clip, type Cue, clamp, type Marker, newCue, newTrack, type Project, pickColor, type TimeRange, type Track } from '@doblaje/core';
+import { t } from '@doblaje/ui';
+import { app } from '../app.svelte.ts';
 import { splitAtPlayhead } from './actions.ts';
 
 const H = { ruler: 28, thumbs: 42, orig: 66, spk: 38, cues: 36, flaps: 22, track: 64 };
@@ -31,17 +18,36 @@ export const cueColor = (c: Pick<Cue, 'character'>): string => {
 };
 
 /**
- * Multi-lane timeline: ruler / video thumbnails / original audio / cues / lip-flap / voice tracks.
- * One canvas for all lanes + a DOM column of lane headers kept row-aligned.
+ * Multi-lane timeline: ruler / video thumbnails / original audio / voices / cues / lip flaps / voice tracks.
+ * One canvas for all lanes + a column of lane headers kept row-aligned (TimelineView.svelte).
  */
 export type LaneKind = 'ruler' | 'thumbs' | 'orig' | 'speakers' | 'cues' | 'flaps' | 'track';
-interface Row {
+export interface Row {
   k: LaneKind;
   h: number;
   y: number;
   /** track id for 'track' lanes */
   id?: string;
 }
+/** The timeline's lanes, top to bottom, with their heights and positions (the canvas and the headers share them). */
+export function lanes(p: Project): Row[] {
+  const rows: Row[] = [
+    { k: 'ruler', h: H.ruler, y: 0 },
+    { k: 'thumbs', h: H.thumbs, y: 0 },
+    { k: 'orig', h: H.orig, y: 0 },
+  ];
+  // one lane per identified character: their passages of the original dialogue
+  if (p.speakers?.segments?.length) for (const sp of p.speakers.list) rows.push({ k: 'speakers', id: sp.id, h: H.spk, y: 0 });
+  rows.push({ k: 'cues', h: H.cues, y: 0 }, { k: 'flaps', h: H.flaps, y: 0 });
+  for (const tr of p.tracks) rows.push({ k: 'track', id: tr.id, h: H.track, y: 0 });
+  let y = 0;
+  for (const r of rows) {
+    r.y = y;
+    y += r.h;
+  }
+  return rows;
+}
+
 type Drag =
   | { type: 'scrub' }
   | { type: 'region'; a: number }
@@ -56,28 +62,39 @@ export interface Hit {
   flap?: TimeRange;
 }
 
+/** The elements a Timeline draws into (TimelineView.svelte renders them, with the toolbar and the lane headers). */
+export interface TimelineElements {
+  canvas: HTMLCanvasElement;
+  /** the canvas's box: its width is the visible time span */
+  wrap: HTMLElement;
+  /** the time scrollbar and its thumb */
+  sbar: HTMLElement;
+  sbarThumb: HTMLElement;
+}
+
+/**
+ * The timeline's canvas: lanes (ruler, video, original, voices, cues, lip flaps, tracks), drawing, pointer editing,
+ * and the edit actions the keyboard and menus use. The markup around it (toolbar, lane headers) is TimelineView.svelte.
+ */
 export class Timeline {
-  readonly root: HTMLElement;
   readonly dpr = window.devicePixelRatio || 1;
   drag: Drag | null = null;
   thumbImg: HTMLImageElement | 'loading' | null = null;
   dirty = true;
   totalH = 0;
-  readonly heads = h('div.tl-heads');
-  readonly canvas = h('canvas.tl', { id: 'timeline-canvas' });
-  readonly wrap = h('div.tl-canvas-wrap', this.canvas);
-  readonly scroll = h('div.tl-scroll', h('div.tl-inner', this.heads, this.wrap));
-  readonly sbarThumb = h('i');
-  readonly sbar = h('div.tl-scrollbar', this.sbarThumb);
-  readonly toolbar: HTMLElement;
+  readonly canvas: HTMLCanvasElement;
+  readonly wrap: HTMLElement;
+  readonly sbar: HTMLElement;
+  readonly sbarThumb: HTMLElement;
   readonly #ro: ResizeObserver;
   readonly #off: (() => void)[];
   #raf = 0;
 
-  constructor(root: HTMLElement) {
-    this.root = root;
-    this.toolbar = this.#toolbar();
-    root.append(this.toolbar, this.scroll, this.sbar);
+  constructor({ canvas, wrap, sbar, sbarThumb }: TimelineElements) {
+    this.canvas = canvas;
+    this.wrap = wrap;
+    this.sbar = sbar;
+    this.sbarThumb = sbarThumb;
     this.#ro = new ResizeObserver(() => {
       this.#resize();
     });
@@ -86,11 +103,8 @@ export class Timeline {
     this.rebuild();
     this.#off = [
       app.store.on('change', (k) => {
-        if (k.has('tracks') || k.has('all') || k.has('media')) this.rebuild();
-        else {
-          if (k.has('markers')) this.#marksBar();
-          this.invalidate();
-        }
+        if (k.has('tracks') || k.has('all') || k.has('media') || k.has('speakers')) this.rebuild();
+        else this.invalidate();
       }),
       app.on('selection', () => {
         this.rebuild();
@@ -127,21 +141,8 @@ export class Timeline {
 
   // ----- geometry -----
   layout(): Row[] {
-    const rows: Row[] = [
-      { k: 'ruler', h: H.ruler, y: 0 },
-      { k: 'thumbs', h: H.thumbs, y: 0 },
-      { k: 'orig', h: H.orig, y: 0 },
-    ];
-    // one lane per identified character: their passages of the original dialogue
-    if (this.p.speakers?.segments?.length) for (const sp of this.p.speakers.list) rows.push({ k: 'speakers', id: sp.id, h: H.spk, y: 0 });
-    rows.push({ k: 'cues', h: H.cues, y: 0 }, { k: 'flaps', h: H.flaps, y: 0 });
-    for (const tr of this.tracks) rows.push({ k: 'track', id: tr.id, h: H.track, y: 0 });
-    let y = 0;
-    for (const r of rows) {
-      r.y = y;
-      y += r.h;
-    }
-    this.totalH = y;
+    const rows = lanes(this.p);
+    this.totalH = rows.reduce((h, r) => h + r.h, 0);
     return rows;
   }
   x2t(x: number): number {
@@ -194,44 +195,7 @@ export class Timeline {
     this.invalidate();
   }
 
-  // ----- toolbar + headers -----
-  #toolbar() {
-    const b = (label: Node, fn: () => void, title: string, id: string) => h('button.icon', { title, id, onclick: fn }, label);
-    const bt = (ic: string, text: string, fn: () => void, title: string, id: string) => h('button', { title, id, onclick: fn }, icon(ic), text);
-    return h(
-      'div.tl-toolbar',
-      b(icon('minus'), () => this.zoom(0.7), t('Zoom out (-)'), 'zoom-out'),
-      b(icon('plus'), () => this.zoom(1.4), t('Zoom in (+)'), 'zoom-in'),
-      b(icon('fit'), () => this.fit(), t('Fit to window'), 'zoom-fit'),
-      h('div.sep'),
-      bt('plus', t('Voice track'), () => this.addTrack(), t('Add a voice track (another character or take lane)'), 'add-track'),
-      bt(
-        'split',
-        t('Split'),
-        () => {
-          this.splitAtPlayhead();
-        },
-        t('Split the selected passage, cue or clip at the playhead (S)'),
-        'split-btn',
-      ),
-      b(
-        icon('trash'),
-        () => {
-          this.deleteSelected();
-        },
-        t('Delete selected clip / cue (Del)'),
-        'del-btn',
-      ),
-      h('div.sep'),
-      bt('loop', t('Loop'), () => this.loopFromSelection(), t('Loop the selected cue or the dragged range (L)'), 'loop-btn'),
-      h('div.row#marks-bar', { title: t('Marks: ⌘/Ctrl+number sets, ⌥/Option+number jumps (Shift+number also sets)') }),
-      h(
-        'span.hint.tl-hint',
-        { title: t('Drag the ruler to scrub · Shift+drag to set a punch/loop range · Ctrl+wheel to zoom') },
-        t('Drag the ruler to scrub · Shift+drag to set a punch/loop range · Ctrl+wheel to zoom'),
-      ),
-    );
-  }
+  // ----- actions used by the toolbar and lane headers -----
   addTrack(): void {
     app.store.commit(
       'Add track',
@@ -243,235 +207,9 @@ export class Timeline {
       ['tracks'],
     );
   }
-  #marksBar() {
-    const bar = this.toolbar.querySelector<HTMLElement>('#marks-bar');
-    if (!bar) return;
-    clear(bar);
-    const ms = this.p.markers || [];
-    bar.append(h('span.small.dim', icon('flag')));
-    if (!ms.length) bar.append(h('span.small.faint', t('⌘/Ctrl+1…9 set a mark · ⌥/Option+1…9 jump')));
-    for (const m of ms)
-      bar.append(
-        h(
-          'button.chip.mark',
-          {
-            dataset: { n: String(m.n) },
-            title: t('Jump to mark {n} (⌥{n}) — right-click to delete', { n: m.n }),
-            onclick: () => app.emit('jump-mark', m.n),
-          },
-          `${m.n} · ${Math.floor(m.t / 60)}:${(m.t % 60).toFixed(1).padStart(4, '0')}`,
-        ),
-      );
-  }
+  /** Lanes changed (tracks, voices, media): recompute their heights and redraw. */
   rebuild(): void {
-    this.#marksBar();
-    const rows = this.layout();
-    clear(this.heads);
-    const p = this.p;
-    const soloAny = p.original.solo || p.tracks.some((x) => x.solo);
-    for (const r of rows) {
-      const hd = h('div.tl-head', { style: { height: `${r.h}px` } });
-      if (r.k === 'ruler')
-        hd.append(h('div.small.dim', t('Timeline')), h('div.mono.small.dim', p.media ? `${p.media.width}×${p.media.height} · ${p.media.fps}fps` : ''));
-      else if (r.k === 'thumbs') hd.append(h('div.name', t('Video')));
-      else if (r.k === 'orig') {
-        const o = p.original;
-        const stems = p.stems?.status === 'ready';
-        append(hd, [
-          h('div.name', t('Original audio')),
-          h(
-            'div.btns',
-            h(`button${o.mute ? '.on' : ''}`, { title: t('Mute original'), onclick: () => this.tog('original', 'mute') }, 'M'),
-            h(`button${o.solo ? '.on' : ''}`, { title: t('Solo original'), onclick: () => this.tog('original', 'solo') }, 'S'),
-            h('input', {
-              type: 'range',
-              min: '0',
-              max: '1.5',
-              step: '0.01',
-              value: String(o.volume),
-              title: t('Original volume'),
-              oninput: (e) => {
-                app.store.silent(
-                  (pr) => {
-                    pr.original.volume = Number(e.target.value);
-                  },
-                  ['levels'],
-                );
-                app.engine.applyLevels();
-              },
-              onchange: () => app.store.commit('Original volume', () => {}, ['levels'], { merge: true }),
-            }),
-          ),
-          stems
-            ? h(
-                'select',
-                {
-                  title: t('Which part of the original to play'),
-                  onchange: (e) => {
-                    app.store.commit(
-                      'Original source',
-                      (pr) => {
-                        pr.original.source = e.target.value as Project['original']['source'];
-                      },
-                      ['levels'],
-                    );
-                    void app.engine.refresh();
-                  },
-                },
-                ...[
-                  ['full', t('Full mix')],
-                  ['bg', t('Music + SFX only')],
-                  ['dialogue', t('Dialogue only')],
-                ].map(([v, l]) => h('option', { value: v, selected: o.source === v }, l)),
-              )
-            : null,
-        ]);
-      } else if (r.k === 'speakers') {
-        const sp = p.speakers.list.find((x) => x.id === r.id);
-        if (!sp) continue;
-        hd.dataset.speaker = sp.id;
-        hd.classList.add('spk-head');
-        const setSp = (patch: { muted?: boolean; solo?: boolean }) => {
-          app.store.commit('Voice setting', () => {
-            Object.assign(sp, patch);
-          }, ['speakers']);
-          void app.engine.refresh();
-        };
-        hd.append(
-          h(
-            'div.name',
-            h('span.swatch', { style: { background: sp.color } }),
-            h('input.nm', {
-              value: sp.name,
-              title: t('Character name'),
-              onchange: (e) => {
-                const old = sp.name;
-                const name = e.target.value.trim() || old;
-                app.store.commit(
-                  'Rename voice',
-                  (pr) => {
-                    const x = pr.speakers.list.find((q) => q.id === sp.id);
-                    if (x) x.name = name;
-                    for (const c of pr.cues) if (c.character === old) c.character = name;
-                  },
-                  ['speakers', 'cues'],
-                );
-              },
-            }),
-          ),
-          h(
-            'div.btns',
-            h(
-              `button.voice-mute${sp.muted ? '.on' : ''}`,
-              { title: t('Silence this character in the original audio, so you can dub it'), onclick: () => setSp({ muted: !sp.muted }) },
-              sp.muted ? t('Off') : t('On'),
-            ),
-            h(`button${sp.solo ? '.on' : ''}`, { title: t('Hear only this character'), onclick: () => setSp({ solo: !sp.solo }) }, 'S'),
-          ),
-        );
-      } else if (r.k === 'cues') hd.append(h('div.name', t('Cue lane')), h('div.small.dim', t('Double-click to add')));
-      else if (r.k === 'flaps') hd.append(h('div.name', t('Lip flaps')), h('div.small.dim', t('Drag to draw mouth-open')));
-      else {
-        const tr = p.tracks.find((x) => x.id === r.id);
-        if (!tr) continue;
-        const sel = app.sel.trackId === tr.id || (!app.sel.trackId && tr === p.tracks[0]);
-        hd.classList.toggle('sel', sel);
-        hd.dataset.track = tr.id;
-        const audible = !tr.mute && (!soloAny || tr.solo);
-        hd.style.opacity = audible ? '1' : '0.55';
-        hd.onclick = () => app.select({ trackId: tr.id });
-        hd.append(
-          h(
-            'div.name',
-            h('span.swatch', { style: { background: tr.color } }),
-            h('input.nm', {
-              value: tr.name,
-              title: t('Rename'),
-              onchange: (e) =>
-                app.store.commit('Rename track', () => {
-                  tr.name = e.target.value;
-                }, ['tracks']),
-              onclick: (e) => e.stopPropagation(),
-            }),
-          ),
-          h(
-            'div.btns',
-            h(
-              `button${tr.mute ? '.on' : ''}`,
-              {
-                title: t('Mute'),
-                onclick: (e) => {
-                  e.stopPropagation();
-                  this.tog(tr.id, 'mute');
-                },
-              },
-              'M',
-            ),
-            h(
-              `button${tr.solo ? '.on' : ''}`,
-              {
-                title: t('Solo'),
-                onclick: (e) => {
-                  e.stopPropagation();
-                  this.tog(tr.id, 'solo');
-                },
-              },
-              'S',
-            ),
-            h('input', {
-              type: 'range',
-              min: '0',
-              max: '1.6',
-              step: '0.01',
-              value: String(tr.volume),
-              title: t('Track volume'),
-              onclick: (e) => e.stopPropagation(),
-              oninput: (e) => {
-                tr.volume = Number(e.target.value);
-                app.engine.applyLevels();
-                app.store.silent(() => {}, ['levels']);
-              },
-              onchange: () => app.store.commit('Track volume', () => {}, ['levels'], { merge: true }),
-            }),
-            p.tracks.length > 1
-              ? h(
-                  'button.ghost',
-                  {
-                    title: t('Remove track'),
-                    onclick: (e) => {
-                      e.stopPropagation();
-                      if (!tr.clips.length || confirm(t('Remove this track and its clips?')))
-                        app.store.commit(
-                          'Remove track',
-                          (pr) => {
-                            pr.tracks = pr.tracks.filter((x) => x.id !== tr.id);
-                          },
-                          ['tracks'],
-                        );
-                    },
-                  },
-                  icon('close', 12),
-                )
-              : null,
-          ),
-          h(
-            'select',
-            {
-              title: t('Voice effect'),
-              onclick: (e) => e.stopPropagation(),
-              onchange: (e) => {
-                app.store.commit('Voice effect', () => {
-                  tr.fx = e.target.value as FxPreset;
-                }, ['tracks']);
-                void app.engine.refresh();
-              },
-            },
-            ...Object.entries(FX_INFO).map(([k, v]) => h('option', { value: k, selected: tr.fx === k }, t(v.label))),
-          ),
-        );
-      }
-      this.heads.append(hd);
-    }
+    this.layout();
     this.#resize();
     this.invalidate();
   }

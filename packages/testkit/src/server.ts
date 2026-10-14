@@ -27,7 +27,18 @@ export async function startApp(overrides: ConfigOverrides & { apiKey?: string } 
   process.env.OPENROUTER_API_KEY = apiKey ?? 'test-key-not-real';
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'doblaje-test-'));
   const webDist = path.join(REPO_ROOT, 'apps', 'web', 'dist');
-  const app = await createApp({ dataDir, port: 0, host: '127.0.0.1', envFile: null, webDir: fs.existsSync(webDist) ? webDist : null, ...rest });
+  const playDist = path.join(REPO_ROOT, 'apps', 'play', 'dist');
+  const app = await createApp({
+    dataDir,
+    port: 0,
+    host: '127.0.0.1',
+    envFile: null,
+    webDir: fs.existsSync(webDist) ? webDist : null,
+    playDir: fs.existsSync(playDist) ? playDist : null,
+    ...rest,
+    party: { port: null, ...rest.party }, // the Wi-Fi listener only when a test asks for it
+    ai: { openrouterBase: 'http://127.0.0.1:9', ...rest.ai }, // never the real OpenRouter; tests pass a mock's URL
+  });
   const port = await app.listen();
   const base = `http://127.0.0.1:${port}`;
   const api = async <T = any>(method: string, url: string, body?: unknown, headers: Record<string, string> = {}): Promise<ApiResponse<T>> => {

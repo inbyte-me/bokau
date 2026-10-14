@@ -1,8 +1,20 @@
 // Editing actions shared by buttons, keyboard shortcuts and context menus, so each exists once.
-import { assignSegment, type Clip, type Cue, errorMessage, newCue, newId, segmentAt, splitSegment, splitTextAt, type TimeRange } from '@doblaje/core';
+import {
+  assignSegment,
+  type Clip,
+  type Cue,
+  errorMessage,
+  newCue,
+  newId,
+  removeSpeaker,
+  segmentAt,
+  splitSegment,
+  splitTextAt,
+  type TimeRange,
+} from '@doblaje/core';
 import { t, toast } from '@doblaje/ui';
 import { api } from '../api.ts';
-import { app } from '../app.ts';
+import { app } from '../app.svelte.ts';
 
 /** Server-side clean-up of one clip's take (rumble, denoise, leveling); the clip then points to the cleaned file. */
 export async function denoiseClip(clip: Clip): Promise<void> {
@@ -81,6 +93,25 @@ export function splitPassageAt(idx: number, time: number): boolean {
     ['speakers'],
   );
   app.select({ segIdx: idx + 1 });
+  return true;
+}
+
+/**
+ * Remove a character from the clip or project, after a warning: its passages leave the timeline and the original
+ * dialogue goes silent where it spoke. Undo brings it back.
+ */
+export function removeCharacter(id: string): boolean {
+  const who = app.project.speakers.list.find((s) => s.id === id);
+  if (!who) return false;
+  const n = app.project.speakers.segments.filter((g) => g.speaker === id).length;
+  const warn = n
+    ? t('Remove {name}? Their {n} passages are removed from the timeline and the original dialogue goes silent in those places.', { name: who.name, n })
+    : t('Remove {name}? They have no passages in the timeline.', { name: who.name });
+  if (!confirm(warn)) return false;
+  app.store.commit('Remove character', (p) => removeSpeaker(p, id), ['speakers', 'cues', 'levels']);
+  app.select({ segIdx: null });
+  void app.engine.refresh();
+  toast(t('{name} removed. Undo brings them back.', { name: who.name }), 'ok');
   return true;
 }
 

@@ -1,0 +1,22 @@
+/* Design tokens shared by the studio, the TV and the phone app (see docs/design.md).
+   Graphite surfaces, one signal red for "now" (sync line, playhead, record), amber only for cue text. */
+:root {
+  --bg: #121211;
+  --panel: #181817;
+  --panel2: #1f1f1d;
+  --panel3: #2a2a27;
+  --line: #34332f;
+  --line2: #46453f;
+  --text: #ebe9e4;
+  --dim: #a8a59c;
+  --faint: #8a877e;
+  --signal: #d4392c;
+  --signal-text: #f0604f;
+  --cue: #e3b04b;
+  --ok: #8bc1a0;
+  --ui: 1;
+  --font: -apple-system, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  --display: "Avenir Next Condensed", "Helvetica Neue", "Arial Narrow", system-ui, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  color-scheme: dark;
+}

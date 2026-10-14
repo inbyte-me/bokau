@@ -7,11 +7,11 @@ import { es } from '../../../packages/ui/src/lang-es.ts';
 const repo = path.resolve(import.meta.dirname, '..', '..', '..');
 // every folder with user-facing strings
 
-const SOURCES = ['apps/web/src', 'packages/ui/src', 'packages/audio/src', 'packages/speech/src'].map((d) => path.join(repo, d));
+const SOURCES = ['apps/web/src', 'apps/play/src', 'packages/ui/src', 'packages/audio/src', 'packages/speech/src'].map((d) => path.join(repo, d));
 const walk = (d: string, out: string[] = []): string[] => {
   for (const f of fs.readdirSync(d)) {
     const p = path.join(d, f);
-    fs.statSync(p).isDirectory() ? walk(p, out) : p.endsWith('.ts') && !p.includes('lang-') && out.push(p);
+    fs.statSync(p).isDirectory() ? walk(p, out) : /\.(ts|svelte)$/.test(p) && !p.includes('lang-') && out.push(p);
   }
   return out;
 };
@@ -47,7 +47,7 @@ test('dynamic labels (fx names, models, advice, genres, premises) are translated
     'Noir Detective',
     'Pirate Swashbuckler',
     'two people arguing about lost cheese',
-    'Your mic level and noise floor look good. 👍',
+    'Your mic level and noise floor look good.',
   ])
     assert.ok(es[k], k);
 });

@@ -121,7 +121,7 @@ export async function buildMix(ctx: BaseAudioContext, project: Project, assets: 
     const ghostOn = include.ghost && project.original.ghost.enabled;
     const source = project.original.source;
     const spk = project.speakers || { list: [], segments: [] };
-    const silenced = silencedRanges(spk.list, spk.segments);
+    const silenced = [...silencedRanges(spk.list, spk.segments), ...(project.dubbed || [])];
     let parts: { buf: AudioBuffer; masked?: boolean }[];
     if (source === 'bg' || ghostOn) parts = assets.bg ? [{ buf: assets.bg }] : ghostOn ? [] : [{ buf: assets.orig }];
     else if (source === 'dialogue') parts = [{ buf: assets.dialogue || assets.orig, masked: !!assets.dialogue }];

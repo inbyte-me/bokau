@@ -2,7 +2,7 @@
 // commands (File → Save…). Nothing else of Electron or Node is exposed.
 import { contextBridge, ipcRenderer } from 'electron';
 
-const COMMANDS = new Set(['save', 'export', 'new', 'open', 'close']);
+const COMMANDS = new Set(['save', 'export', 'new', 'open', 'close', 'ai-changed']);
 
 contextBridge.exposeInMainWorld('doblajeDesktop', {
   platform: process.platform,

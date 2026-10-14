@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import type { Media, Progress, ProjectRepository } from '@doblaje/core';
+import type { Media, ProbeInfo, Progress, ProjectRepository, Thumbs } from '@doblaje/core';
 import type { MediaConfig } from './config.ts';
 import { exec, probe, runFfmpeg } from './ffmpeg.ts';
 
@@ -38,33 +38,10 @@ export async function ingest(cfg: MediaConfig, projects: ProjectRepository, id: 
   const proxy = path.join(dir, 'proxy.mp4');
   set(0.05, 'video');
   if (info.hasVideo) {
-    const scale = info.height > 720 ? ['-vf', 'scale=-2:720,format=yuv420p'] : ['-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p'];
-    const gop = String(Math.max(2, Math.trunc(Math.round(info.fps || 25) / 2)));
-    await runFfmpeg(
-      cfg,
-      [
-        '-i',
-        srcFile,
-        '-map',
-        '0:v:0',
-        '-an',
-        ...scale,
-        '-c:v',
-        'libx264',
-        '-preset',
-        'veryfast',
-        '-crf',
-        '24',
-        '-g',
-        gop,
-        '-sc_threshold',
-        '0',
-        '-movflags',
-        '+faststart',
-        proxy,
-      ],
-      { durationSec: duration, onProgress: (f) => set(0.05 + f * 0.5, 'video') },
-    );
+    await runFfmpeg(cfg, ['-i', srcFile, '-map', '0:v:0', '-an', ...proxyEncoding(info), proxy], {
+      durationSec: duration,
+      onProgress: (f) => set(0.05 + f * 0.5, 'video'),
+    });
   } else {
     await runFfmpeg(cfg, [
       '-f',
@@ -94,8 +71,42 @@ export async function ingest(cfg: MediaConfig, projects: ProjectRepository, id: 
     await runFfmpeg(cfg, ['-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=stereo', '-t', String(duration), '-c:a', 'pcm_s16le', audioFile]);
   }
 
-  // 3. poster + thumbnail strip (~1 thumb/s, at most 240, rows of <= 20 to keep the sprite sane)
+  // 3. poster + thumbnail strip
   set(0.8, 'thumbnails');
+  const thumbs = await posterAndThumbs(cfg, dir, duration, info);
+
+  const media: Media = {
+    ...info,
+    ready: true,
+    proxy: 'proxy.mp4',
+    audio: 'audio_orig.wav',
+    audioStt: info.hasAudio ? 'audio_16k.wav' : null,
+    sourceFile: path.basename(srcFile),
+    thumbs,
+    ingestedAt: new Date().toISOString(),
+  };
+  const fresh = projects.get(id);
+  fresh.media = media;
+  projects.save(fresh);
+  set(1, 'done');
+  return media;
+}
+
+/** The proxy's encoding (edit-friendly: at most 720p, short GOP for smooth scrubbing); the caller maps the video. */
+export function proxyEncoding(info: Pick<ProbeInfo, 'height' | 'fps'>): string[] {
+  const scale = info.height > 720 ? ['-vf', 'scale=-2:720,format=yuv420p'] : ['-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p'];
+  return [...scale, ...proxyCodec(info)];
+}
+
+/** The proxy's codec settings alone (for a picture already at the proxy's size). */
+export function proxyCodec(info: Pick<ProbeInfo, 'fps'>): string[] {
+  const gop = String(Math.max(2, Math.trunc(Math.round(info.fps || 25) / 2)));
+  return ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '24', '-g', gop, '-sc_threshold', '0', '-movflags', '+faststart'];
+}
+
+/** Poster (about a second in) and thumbnail strip (~1 thumb/s, at most 240, rows of <= 20 to keep the sprite sane), from the proxy. */
+export async function posterAndThumbs(cfg: MediaConfig, dir: string, duration: number, info: Pick<ProbeInfo, 'width' | 'height'>): Promise<Thumbs> {
+  const proxy = path.join(dir, 'proxy.mp4');
   await runFfmpeg(cfg, [
     '-ss',
     String(Math.min(1, duration / 4)),
@@ -126,20 +137,5 @@ export async function ingest(cfg: MediaConfig, projects: ProjectRepository, id: 
     '5',
     path.join(dir, 'thumbs.jpg'),
   ]);
-
-  const media: Media = {
-    ...info,
-    ready: true,
-    proxy: 'proxy.mp4',
-    audio: 'audio_orig.wav',
-    audioStt: info.hasAudio ? 'audio_16k.wav' : null,
-    sourceFile: path.basename(srcFile),
-    thumbs: { file: 'thumbs.jpg', count, interval, w: tw, h: th, cols, rows },
-    ingestedAt: new Date().toISOString(),
-  };
-  const fresh = projects.get(id);
-  fresh.media = media;
-  projects.save(fresh);
-  set(1, 'done');
-  return media;
+  return { file: 'thumbs.jpg', count, interval, w: tw, h: th, cols, rows };
 }

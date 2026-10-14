@@ -28,8 +28,18 @@ Request/response types shared with the browser live in `packages/core/src/contra
 | POST | `/api/projects/:id/export-plan` | what an export would do (stream copy or re-encode) |
 | POST | `/api/projects/:id/podcast-export` | format, clean-up, loudness, trim, chapters → `202 { job }` |
 | POST | `/api/projects/:id/import-subs` | SRT/VTT text body → `{ cues }` |
+| GET / POST | `/api/sounds` | background audio library / add one (raw body, `x-filename`) → `202 { job }` (converted to AAC) |
+| PUT / DELETE | `/api/sounds/:id` | rename `{ name }` / remove with its file |
+| POST | `/api/party/rooms` | open a party room (local listener only) → `{ code, hostKey, joinUrl }` |
+| GET | `/api/party/info` | where phones join (`joinBase`), LAN addresses |
+| GET | `/api/party/rooms/:code/project` | the round's project, for a cast phone (`x-party-token`) |
+| POST | `/api/party/rooms/:code/takes?turn&start` | a recorded line (WAV) for the current turn (`x-party-token`) → `201 { file, duration }` |
+
+WebSocket: `/party/ws` on both listeners: the room's live state for the TV (`hello-host` with the host key) and the
+phones (`hello-player` with name or token). Messages: `packages/party/src/protocol.ts`; flow: [party.md](party.md).
 
 Non-API paths: `/media/:id/<file>` (allow-listed project files, HTTP Range for seeking, exports as downloads),
+`/play/…` (the phone app), `/party/:code/media/<file>?t=token` (the round's media for phones), `/sounds/<id>.m4a`,
 `/hf/…` (model cache proxy), `/vendor/{transformers,ort}/…` (speech libraries), everything else the web app.
 
 ## Jobs
@@ -37,6 +47,8 @@ Long work answers `202 { job }` immediately; poll `GET /api/jobs/:id` (the web c
 Media functions receive a `Progress` callback `(fraction, message)`; they never see HTTP.
 
 ## Security
+* The **party listener** (HTTPS, all interfaces, self-signed) serves only the phone app, the player routes, the
+  round's media and background sounds, each behind a room token. See [party.md](party.md#security).
 * Binds to `127.0.0.1` by default. On a loopback bind, requests whose `Host` is not localhost are rejected
   (DNS-rebinding guard) and state-changing requests with a foreign `Origin` are rejected (CSRF guard).
 * The OpenRouter key is read from the environment and never sent to the browser (a test asserts it).

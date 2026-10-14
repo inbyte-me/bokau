@@ -15,9 +15,13 @@
     "@doblaje/core": "workspace:*",
     "@doblaje/db": "workspace:*",
     "@doblaje/media": "workspace:*",
-    "@huggingface/transformers": "catalog:"
+    "@doblaje/party": "workspace:*",
+    "@huggingface/transformers": "catalog:",
+    "selfsigned": "5.5.0",
+    "ws": "8.21.3"
   },
   "devDependencies": {
-    "@doblaje/testkit": "workspace:*"
+    "@doblaje/testkit": "workspace:*",
+    "@types/ws": "8.18.1"
   }
 }

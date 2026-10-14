@@ -3,7 +3,7 @@
 import { applyTake } from '@doblaje/audio';
 import { type Cue, carveClips, MIN_PASSAGE, newCue, newId, type TimeRange } from '@doblaje/core';
 import { type MenuItem, registerMenu, t } from '@doblaje/ui';
-import { app } from '../app.ts';
+import { app } from '../app.svelte.ts';
 import {
   assignPassage,
   clearRange,
@@ -12,6 +12,7 @@ import {
   denoiseClip,
   playCue,
   playFrom,
+  removeCharacter,
   setLoop,
   splitClipAt,
   splitCueAt,
@@ -123,6 +124,9 @@ export function registerStudioMenus(ctx: StudioMenuCtx): () => void {
                 }
               : 'separator',
             'separator',
+            ...(who
+              ? [{ label: t('Remove {name}…', { name: who.name }), icon: 'trash', danger: true, run: () => void removeCharacter(who.id) } satisfies MenuItem]
+              : []),
             ...store.project.speakers.list
               .filter((s) => s.id !== seg.speaker)
               .map(
@@ -366,7 +370,7 @@ export function registerStudioMenus(ctx: StudioMenuCtx): () => void {
       { label: t('TV mode (big UI, fullscreen)'), icon: 'tv', shortcut: 'F', run: ctx.toggleTv },
     ]),
 
-    // ---- identified voices in the Mix panel
+    // ---- identified voices: their rows in the Voices tab and their lane headers in the timeline
     registerMenu('.voice-row[data-speaker], .tl-head[data-speaker]', (el) => {
       const sp = store.project.speakers.list.find((s) => s.id === (el as HTMLElement).dataset.speaker);
       if (!sp) return null;
@@ -392,6 +396,7 @@ export function registerStudioMenus(ctx: StudioMenuCtx): () => void {
           run: () => set({ muted: !sp.muted }),
         },
         { label: sp.solo ? t('Hear everyone') : t('Hear only {name}', { name: sp.name }), run: () => set({ solo: !sp.solo }) },
+        { label: t('Remove {name}…', { name: sp.name }), icon: 'trash', danger: true, run: () => void removeCharacter(sp.id) },
       ];
     }),
   ];

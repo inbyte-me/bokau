@@ -5,6 +5,7 @@ export interface DesktopPaths {
   dataDir: string;
   modelsDir: string;
   webDir: string;
+  playDir: string;
   migrationsDir: string;
   vendorDirs: { transformers: string; ort: string };
   toolsDir: string;
@@ -27,6 +28,7 @@ export function resolvePaths(app: App): DesktopPaths {
     dataDir: process.env.DOBLAJE_DATA || path.join(user, 'data'),
     modelsDir: process.env.DOBLAJE_MODELS || (app.isPackaged ? path.join(user, 'models') : path.join(repo, 'models')),
     webDir: app.isPackaged ? path.join(res, 'web') : path.resolve(bundle, '..', '..', 'web', 'dist'),
+    playDir: app.isPackaged ? path.join(res, 'play') : path.resolve(bundle, '..', '..', 'play', 'dist'),
     migrationsDir: path.join(app.isPackaged ? res : path.join(res, 'dist'), 'drizzle'),
     vendorDirs: { transformers: path.join(bundle, 'vendor', 'transformers'), ort: path.join(bundle, 'vendor', 'ort') },
     toolsDir: process.env.DOBLAJE_TOOLS || (app.isPackaged ? path.join(user, 'tools') : path.join(repo, 'tools')),

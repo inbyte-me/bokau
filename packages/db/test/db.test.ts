@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { AiLedger, closeDatabase, openDatabase, SqliteProjectRepository } from '../src/index.ts';
+import { AiLedger, closeDatabase, openDatabase, SoundRepository, SqliteProjectRepository } from '../src/index.ts';
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'doblaje-db-'));
 
@@ -16,7 +16,7 @@ test('migrations create the schema and are idempotent', () => {
     .prepare("select name from sqlite_master where type = 'table' order by name")
     .all()
     .map((r) => r.name);
-  for (const t of ['ai_calls', 'meta', 'projects']) assert.ok(tables.includes(t), `${t} in ${tables}`);
+  for (const t of ['ai_calls', 'meta', 'projects', 'sounds']) assert.ok(tables.includes(t), `${t} in ${tables}`);
   closeDatabase(db);
   fs.rmSync(dir, { recursive: true, force: true });
 });
@@ -108,6 +108,32 @@ test('library clips: derive projects that share media (hard links) and copy the 
   // deleting the clip leaves derived projects playable (their hard links keep the bytes)
   repo.remove(clip.id);
   assert.equal(fs.readFileSync(path.join(repo.dir(party.id), 'proxy.mp4'), 'utf8'), 'video');
+  closeDatabase(db);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('sound library: add, list, rename, remove with its file', () => {
+  const dir = tmp();
+  const db = openDatabase({ file: ':memory:' });
+  const repo = new SoundRepository(db, path.join(dir, 'sounds'));
+  const a = repo.newId();
+  fs.writeFileSync(repo.file(a), 'x');
+  repo.add(a, { name: 'Lluvia', duration: 30 });
+  const b = repo.newId();
+  repo.add(b, { name: 'Fiesta', duration: 60 });
+  assert.deepEqual(
+    repo
+      .list()
+      .map((s) => s.name)
+      .sort(),
+    ['Fiesta', 'Lluvia'],
+  );
+  assert.equal(repo.list()[0].url, `/sounds/${repo.list()[0].id}.m4a`);
+  assert.equal(repo.rename(a, 'Rain').name, 'Rain');
+  repo.remove(a);
+  assert.ok(!fs.existsSync(repo.file(a)));
+  assert.equal(repo.list().length, 1);
+  assert.throws(() => repo.file('../x'), /bad sound id/);
   closeDatabase(db);
   fs.rmSync(dir, { recursive: true, force: true });
 });

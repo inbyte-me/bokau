@@ -30,14 +30,28 @@ The red sync line of the rhythm band: text travels toward a single red line, exa
 * One primary decision per screen; no more than four items in a menu.
 * Motion: none except the record blink; `prefers-reduced-motion` disables it.
 
+## The party room is a show
+The studio is equipment; the party room (`#/party`, the TV) is a game show, played from a sofa with phones
+(Jackbox's model: the TV is the stage and shows how to join from the first second; each phone does one task at a
+time; you learn by playing). The rules above still hold, with these differences:
+* **One decision per screen, in steps:** Scene → Game → Players, then the round runs by itself (getting ready →
+  the cast → turns → the show). A header is always there with the room code, the join address and a small QR.
+* **Player colours are content.** Each player gets a colour by join order (`PLAYER_COLORS`), used for their tile, their
+  turns on the board, their track and their phone's top stripe. Controls stay graphite and signal red.
+* **Big display type** for names, titles and the room code (the condensed face), readable from a sofa.
+* **Motion with a meaning only:** a player tile slides in when someone joins, the cast is revealed one by one, the
+  "writing the script" bar sweeps, the recording dot blinks. All of it is off with `prefers-reduced-motion`.
+* **Nothing spoils the show:** the TV never shows the script or plays a take before the show; phones only show their
+  own line.
+* Games are listed A–E (named games, as the letters always were).
+
 ## Workflow and where things live
 The studio is organised around what a dub actually needs, most-used first (inspired by transcribe-and-detect-speakers
 on import in Descript, the green-room device check in Riverside, and the marker list in DaVinci Resolve):
 
 0. **Clip library** (start page): add a clip once, prepare it (below), then start any number of dubbing, party or
    podcast projects from it. A clip opens in the studio without recording; *Start a project ▾* derives one.
-   **Party: pick a clip** is the karaoke entry: anyone picks a clip and the character(s) they play; those voices go
-   silent, only their lines light up, they record, the reveal plays, *Next player* goes back to the list.
+   **Play at a party** on a clip opens the party room with it (below).
 1. **Prepare** (Voices tab, or automatically right after import): separate dialogue from music → subtitles → speakers,
    one checklist with a *Prepare all* button. Each step can be re-run on its own; mono clips fall back to the neural
    separator when it is installed.

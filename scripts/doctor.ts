@@ -1,6 +1,7 @@
 // `pnpm doctor`: checks what the app depends on and prints how to fix what's missing. Changes nothing.
 import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 const root = path.resolve(import.meta.dirname, '..');
@@ -44,6 +45,8 @@ if (fs.existsSync(path.join(root, 'node_modules', '.pnpm'))) ok('dependencies in
 else bad('dependencies missing', 'pnpm install');
 if (fs.existsSync(path.join(root, 'apps', 'web', 'dist', 'index.html'))) ok('web app built');
 else warn('web app not built yet (pnpm build, or use pnpm dev)');
+if (fs.existsSync(path.join(root, 'apps', 'play', 'dist', 'index.html'))) ok('phone app built');
+else warn('phone app not built yet (pnpm build): phones cannot join party rooms');
 if (fs.existsSync(path.join(root, 'tools', 'venv', 'bin', 'python'))) ok('neural separator installed (Demucs)');
 else warn('neural separator not installed: mono clips cannot be split (pnpm setup:separation, ~1 GB)');
 if (process.env.OPENROUTER_API_KEY) ok('OPENROUTER_API_KEY found (AI features on; cheap default model, local spend cap)');
@@ -58,4 +61,16 @@ if (process.platform === 'darwin') {
   if (/audio|interface|codec|usb.*mic/i.test(usb)) ok('a USB audio device is on the bus');
   else warn('no USB audio interface on the USB bus (fine if you use the built-in mic)');
 }
+// where phones join a party room (same Wi-Fi); mirrors packages/api/src/party/net.ts
+const lan = Object.values(os.networkInterfaces())
+  .flat()
+  .filter((a) => a && a.family === 'IPv4' && !a.internal)
+  .map((a) => a?.address ?? '')
+  .sort((a, b) => Number(/^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(b)) - Number(/^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(a)));
+const partyPort = process.env.PARTY_PORT ?? '5178';
+if (partyPort === 'off') warn('party rooms are off for phones (PARTY_PORT=off)');
+else if (process.env.PARTY_URL) ok(`phones join party rooms at ${process.env.PARTY_URL}/play/`);
+else if (lan.length) ok(`phones join party rooms at https://${lan[0]}:${partyPort}/play/  (same Wi-Fi; confirm the certificate once)`);
+else warn('no local network address: phones cannot join party rooms (connect to Wi-Fi)');
+
 console.log('\nStart with: pnpm start  ->  http://localhost:5177   (or pnpm dev, or pnpm desktop)\n');

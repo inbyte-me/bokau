@@ -25,12 +25,16 @@ export class Assets implements MixAssets {
   peaks = new Map<string, Peaks>();
   totalDuration = 0;
 
-  constructor(ctx: BaseAudioContext, projectId: string) {
+  /** where a project file is fetched from (phones in a party room go through the room's media path) */
+  readonly url: (name: string) => string;
+
+  constructor(ctx: BaseAudioContext, projectId: string, url?: (name: string) => string) {
     this.ctx = ctx;
     this.id = projectId;
+    this.url = url ?? ((name) => `/media/${projectId}/${name}`);
   }
   async #decode(name: string): Promise<AudioBuffer> {
-    const r = await fetch(`/media/${this.id}/${name}`);
+    const r = await fetch(this.url(name));
     if (!r.ok) throw new Error(`${name}: HTTP ${r.status}`);
     return this.ctx.decodeAudioData(await r.arrayBuffer());
   }

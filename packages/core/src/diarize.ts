@@ -1,5 +1,5 @@
 // Speaker identification helpers (pure, shared, tested): windowing, clustering of voice embeddings, turn building.
-import type { Speaker, SpeakerSegment, TimeRange } from './project.ts';
+import type { Cue, Project, Speaker, SpeakerSegment, TimeRange } from './project.ts';
 
 export type Vec = ArrayLike<number>;
 
@@ -225,3 +225,25 @@ export function mergeTouching(segments: SpeakerSegment[], gap = 0.01): SpeakerSe
 /** Index of the passage containing `t` (optionally only for one speaker), or -1. */
 export const segmentAt = (segments: SpeakerSegment[], t: number, speaker?: string): number =>
   segments.findIndex((g) => (!speaker || g.speaker === speaker) && t >= g.start && t < g.end);
+
+/**
+ * Who says a subtitle line: the voice heard most during it (the passages are what the user checks and corrects in
+ * the Voices lane), else the character name typed on the line. Null when nobody known speaks it.
+ */
+export function speakerOfCue(cue: Pick<Cue, 'start' | 'end' | 'character'>, speakers: Pick<Project, 'speakers'>['speakers']): Speaker | null {
+  const id = dominantSpeaker(speakers.segments, cue.start, cue.end);
+  return speakers.list.find((s) => s.id === id) ?? speakers.list.find((s) => !!cue.character && s.name === cue.character) ?? null;
+}
+
+/**
+ * Remove a character: its passages leave the timeline and the original dialogue goes silent where it spoke (those
+ * ranges join `dubbed`); subtitle lines lose its name. Mutates `p` (call it inside a store commit, which undoes it).
+ */
+export function removeSpeaker(p: Pick<Project, 'speakers' | 'cues' | 'dubbed'>, id: string): void {
+  const who = p.speakers.list.find((s) => s.id === id);
+  if (!who) return;
+  const gone = p.speakers.segments.filter((g) => g.speaker === id).map((g) => ({ start: g.start, end: g.end }));
+  p.speakers = { list: p.speakers.list.filter((s) => s.id !== id), segments: p.speakers.segments.filter((g) => g.speaker !== id) };
+  p.dubbed = [...(p.dubbed ?? []), ...gone];
+  for (const c of p.cues) if (c.character === who.name) c.character = '';
+}

@@ -1,38 +1,8 @@
 import assert from 'node:assert/strict';
-import http from 'node:http';
 import test from 'node:test';
 import { countText } from '@doblaje/core';
-import { startApp } from '@doblaje/testkit';
+import { mockOpenRouter as mockUpstream, startApp } from '@doblaje/testkit';
 
-// Mock OpenRouter so tests cost nothing.
-type MockReq = { headers: http.IncomingHttpHeaders; body: any; url?: string };
-async function mockUpstream(handler: (body: any, n: number) => { status?: number; json: unknown }) {
-  const reqs: MockReq[] = [];
-  const srv = http.createServer(async (req, res) => {
-    const chunks: Buffer[] = [];
-    for await (const c of req) chunks.push(c);
-    const body = JSON.parse(Buffer.concat(chunks).toString() || '{}');
-    reqs.push({ headers: req.headers, body, url: req.url });
-    let out: { status?: number; json: unknown };
-    try {
-      out = handler(body, reqs.length);
-    } catch (e) {
-      out = { status: 500, json: { error: { message: `mock handler failed: ${e.message}` } } };
-    }
-    res.writeHead(out.status || 200, { 'content-type': 'application/json' });
-    res.end(JSON.stringify(out.json));
-  });
-  await new Promise<void>((r) => srv.listen(0, '127.0.0.1', r));
-  return {
-    reqs,
-    url: `http://127.0.0.1:${(srv.address() as import('node:net').AddressInfo).port}`,
-    close: () =>
-      new Promise((r) => {
-        srv.closeAllConnections();
-        srv.close(r);
-      }),
-  };
-}
 const reply = (lines, cost = 0.0001) => ({
   json: { model: 'mock/model', choices: [{ message: { content: JSON.stringify({ lines }) } }], usage: { cost, total_tokens: 300 } },
 });

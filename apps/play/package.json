@@ -1,0 +1,26 @@
+{
+  "name": "@doblaje/play",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Phone client for party rooms: join, get cast, record your lines. Served by the server at /play/.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "svelte-check --tsconfig ./tsconfig.json --fail-on-warnings"
+  },
+  "dependencies": {
+    "@doblaje/audio": "workspace:*",
+    "@doblaje/core": "workspace:*",
+    "@doblaje/party": "workspace:*",
+    "@doblaje/party-ui": "workspace:*",
+    "@doblaje/ui": "workspace:*",
+    "svelte": "catalog:"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "catalog:",
+    "svelte-check": "catalog:",
+    "typescript": "catalog:svelte-check",
+    "vite": "catalog:"
+  }
+}

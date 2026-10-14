@@ -18,3 +18,15 @@ catalog:
   "@types/node": ^24.9.0
   drizzle-orm: 1.0.0-rc.4
   typescript: 7.0.2
+  # Svelte apps (web, play)
+  svelte: 5.57.1
+  "@sveltejs/vite-plugin-svelte": 7.3.1
+  svelte-check: 4.7.6
+  vite: 8.3.4
+  uqr: 0.1.3
+
+# svelte-check uses TypeScript's JS language-service API, which TypeScript 7 (native) does not ship:
+# the Svelte apps type-check with TypeScript 6 (same tsconfig flags), everything else with 7.
+catalogs:
+  svelte-check:
+    typescript: 6.0.3

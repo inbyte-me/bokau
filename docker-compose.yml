@@ -1,0 +1,37 @@
+# A party server on your own domain with automatic HTTPS (Caddy gets and renews the certificate).
+#   1. point DOMAIN's DNS A/AAAA record at this machine, open ports 80 and 443
+#   2. copy .env.example to .env and set DOMAIN (and OPENROUTER_API_KEY if you want the AI)
+#   3. put your prepared clips in the data volume (docs/deployment.md, "Clips")
+#   4. docker compose up -d
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DOBLAJE_MODE: party
+      PARTY_URL: https://${DOMAIN:?set DOMAIN in .env}
+      TRUST_PROXY: "1"          # Caddy is one hop in front
+    volumes:
+      - party-data:/data
+    expose:
+      - "5177"
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - app
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+volumes:
+  party-data:
+  caddy-data:
+  caddy-config:

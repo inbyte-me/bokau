@@ -1,5 +1,7 @@
 # 0005: No UI framework
 
+**Status: superseded by [0007](0007-svelte-frontend.md).**
+
 **Context.** The UI is a dense studio tool: a canvas timeline and rhythm band redrawn every frame, a video stage,
 and forms in side panels. State lives in one store with undo and autosave; the hot path is Web Audio and canvas.
 

@@ -82,7 +82,7 @@ for (const [w, h] of SIZES) {
     await page.close();
   });
 }
-test('party screens (setup, perform) and podcast review fit the window with a 1080p video', async () => {
+test('a party round on the TV and the podcast review fit the window with a 1080p video', async () => {
   for (const [w, h] of [
     [1920, 1080],
     [1280, 720],
@@ -92,19 +92,12 @@ test('party screens (setup, perform) and podcast review fit the window with a 10
     await page.setViewport({ width: w, height: h });
     await page.evaluateOnNewDocument(() => localStorage.setItem('lang', 'en'));
     await injectFakeMic(page, fx('mic_speech.wav'));
+    // the TV room shows video only in the show; a finished round opens on the same kind of screen
     await page.goto(`${app.base}/#/p/${ids.party}`);
-    await page.waitForSelector('#mode-badlip');
-    await page.click('#mode-badlip');
-    await page.waitForSelector('#badlip-go');
-    await page.waitForFunction(() => document.querySelector<HTMLVideoElement>('.stage video')?.videoWidth > 0);
-    await check(page, `party setup ${w}×${h}`);
-    await page.$eval('input#match-sounds', (e) => {
-      e.checked = false;
-    });
-    await page.click('#badlip-go');
-    await page.waitForSelector('#perform-start', { timeout: 90000 });
-    await wait(300);
-    await check(page, `party perform ${w}×${h}`);
+    await page.waitForSelector('#party-round', { timeout: 30000 });
+    await page.waitForFunction(() => document.querySelector<HTMLVideoElement>('.stage video')?.videoWidth > 0, { timeout: 15000 });
+    await wait(200);
+    await check(page, `party round ${w}×${h}`);
     await page.goto(`${app.base}/#/p/${ids.pod}`);
     await page.waitForSelector('#wave', { timeout: 30000 });
     await page.waitForFunction(() => document.querySelector<HTMLVideoElement>('.stage video')?.videoWidth > 0);

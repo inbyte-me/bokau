@@ -1,0 +1,15 @@
+# HTTPS for the party server: Caddy obtains and renews the certificate for {$DOMAIN} by itself.
+# WebSockets (/party/ws) pass through untouched; takes and the result are streamed, not buffered.
+{$DOMAIN} {
+	encode zstd gzip
+	request_body {
+		max_size 700MB
+	}
+	reverse_proxy app:5177 {
+		flush_interval -1
+		transport http {
+			read_timeout 10m
+			write_timeout 10m
+		}
+	}
+}

@@ -44,7 +44,7 @@ test('REAL MIC: open, meter, record a take through the studio, transcribe it on-
         const o = [...document.querySelectorAll<HTMLOptionElement>('#mic-device option')].find((x) => new RegExp(re, 'i').test(x.textContent));
         if (!o) return null;
         document.querySelector<HTMLSelectElement>('#mic-device').value = o.value;
-        document.querySelector('#mic-device').dispatchEvent(new Event('change'));
+        document.querySelector('#mic-device').dispatchEvent(new Event('change', { bubbles: true })); // as a real change event (Svelte delegates it);
         return o.textContent;
       }, process.env.LIVE_DEVICE);
       assert.ok(

@@ -7,7 +7,41 @@ import type { MediaConfig } from '@doblaje/media';
 /** Repository root when running from source (apps and packages live under it). */
 export const REPO_ROOT = path.resolve(import.meta.dirname, '..', '..', '..');
 
+/**
+ * `studio`: the desktop/laptop app (the studio and the TV on localhost, phones on the Wi-Fi through a second HTTPS
+ * listener). `party`: a server for rooms only, meant to run behind a domain: one listener that serves the phone app, the
+ * party API and the rooms' media, never the studio (see docs/deployment.md).
+ */
+export type ServerMode = 'studio' | 'party';
+
+export interface PartyConfig {
+  /** HTTPS port phones join on (all interfaces); null: no party listener (phones cannot join from the Wi-Fi) */
+  port: number | null;
+  host: string;
+  /** address printed in the QR code instead of https://<lan-ip>:<port> (a tunnel, a real domain) */
+  publicUrl: string | null;
+  /** invite link for a phone app served from another address, `{code}` standing for the room code (default: PARTY_URL/play/?room=CODE) */
+  joinUrl: string | null;
+  /** reverse proxies in front of the server (their `x-forwarded-for` is believed for this many hops); 0: none */
+  trustProxy: number;
+  /** other origins whose pages may talk to this server (a phone app served from a CDN); this server's own is always allowed */
+  origins: string[];
+  /** rooms open at once */
+  maxRooms: number;
+  /** rooms one address may open per hour */
+  createsPerHour: number;
+  /** party mode: minutes after the last person leaves a room before its media is deleted (the result can be downloaded until then) */
+  emptyRoomMinutes: number;
+  /** party mode: hours a round's project is kept before it is deleted (the library's clips are never touched) */
+  retentionHours: number;
+  /** party mode: serve HTTPS directly with this certificate (otherwise plain HTTP, for a proxy that terminates TLS) */
+  tls: { cert: string; key: string } | null;
+  /** the server listens to takes (speech-to-text on the server) so a room needs no TV for it */
+  transcribe: boolean;
+}
+
 export interface AppConfig {
+  mode: ServerMode;
   /** projects (media files) and the database live here */
   dataDir: string;
   projectsDir: string;
@@ -18,6 +52,13 @@ export interface AppConfig {
   modelsDir: string;
   /** built web app (apps/web/dist); null serves only the API */
   webDir: string | null;
+  /** built phone app (apps/play/dist), served at /play/ */
+  playDir: string | null;
+  /** background audio library files */
+  soundsDir: string;
+  /** the party listener's self-signed certificate */
+  tlsDir: string;
+  party: PartyConfig;
   /** browser builds of transformers.js and onnxruntime-web, served to the speech worker */
   vendorDirs: { transformers: string; ort: string };
   host: string;
@@ -27,8 +68,9 @@ export interface AppConfig {
   ai: AiConfig;
 }
 
-export type ConfigOverrides = Partial<Omit<AppConfig, 'media' | 'ai'>> & {
+export type ConfigOverrides = Partial<Omit<AppConfig, 'media' | 'ai' | 'party'>> & {
   media?: Partial<MediaConfig>;
+  party?: Partial<PartyConfig>;
   ai?: Partial<AiConfig>;
   /** file with KEY=value lines; real environment variables win */
   envFile?: string | null;
@@ -55,15 +97,43 @@ export function loadConfig(o: ConfigOverrides = {}): AppConfig {
   const env = process.env;
   const dataDir = o.dataDir || env.DOBLAJE_DATA || path.join(REPO_ROOT, 'data');
   const webDist = path.join(REPO_ROOT, 'apps', 'web', 'dist');
+  const playDist = path.join(REPO_ROOT, 'apps', 'play', 'dist');
+  const partyPort = env.PARTY_PORT === 'off' ? null : Number(env.PARTY_PORT ?? 5178);
+  const mode: ServerMode = (o.mode ?? env.DOBLAJE_MODE) === 'party' ? 'party' : 'studio';
+  const list = (v: string | undefined) =>
+    (v ?? '')
+      .split(',')
+      .map((x) => x.trim().replace(/\/$/, ''))
+      .filter(Boolean);
+  const number = (v: string | undefined, fallback: number) => (v !== undefined && v !== '' && Number.isFinite(Number(v)) ? Number(v) : fallback);
   return {
+    mode,
     dataDir,
     projectsDir: o.projectsDir || path.join(dataDir, 'projects'),
     dbFile: o.dbFile || path.join(dataDir, 'doblaje.db'),
     migrationsDir: o.migrationsDir,
     modelsDir: o.modelsDir || env.DOBLAJE_MODELS || path.join(REPO_ROOT, 'models'),
     webDir: o.webDir !== undefined ? o.webDir : fs.existsSync(webDist) ? webDist : null,
+    playDir: o.playDir !== undefined ? o.playDir : fs.existsSync(playDist) ? playDist : null,
+    soundsDir: o.soundsDir || path.join(dataDir, 'sounds'),
+    tlsDir: o.tlsDir || path.join(dataDir, 'tls'),
+    party: {
+      port: partyPort,
+      host: env.PARTY_HOST || '0.0.0.0',
+      publicUrl: env.PARTY_URL || null,
+      joinUrl: env.PARTY_JOIN_URL || null,
+      trustProxy: number(env.TRUST_PROXY, 0),
+      origins: list(env.PARTY_ORIGINS),
+      maxRooms: number(env.PARTY_MAX_ROOMS, 20),
+      createsPerHour: number(env.PARTY_CREATES_PER_HOUR, 12),
+      emptyRoomMinutes: number(env.PARTY_EMPTY_ROOM_MINUTES, 5),
+      retentionHours: number(env.PARTY_RETENTION_HOURS, 24),
+      tls: env.TLS_CERT && env.TLS_KEY ? { cert: env.TLS_CERT, key: env.TLS_KEY } : null,
+      transcribe: env.PARTY_TRANSCRIBE === '1',
+      ...o.party,
+    },
     vendorDirs: o.vendorDirs || defaultVendorDirs(),
-    host: o.host || env.HOST || '127.0.0.1',
+    host: o.host || env.HOST || (mode === 'party' ? '0.0.0.0' : '127.0.0.1'),
     port: Number(o.port ?? env.PORT ?? 5177),
     maxUploadBytes: o.maxUploadBytes ?? 8 * 1024 ** 3,
     media: {

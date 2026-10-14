@@ -1,5 +1,5 @@
 import { type Cue, detectLang, type WordTiming, wordTimings } from '@doblaje/core';
-import { app } from '../app.ts';
+import { app } from '../app.svelte.ts';
 import { cueColor } from './timeline.ts';
 /**
  * "Bande rythmée": text scrolls right -> left towards the red indicator line, like a real dubbing studio.

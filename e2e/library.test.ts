@@ -81,14 +81,14 @@ test('library: empty state, create a project by uploading a video, land in the s
   await page.close();
 });
 
-test('library: party mode project opens the party hub', async () => {
-  const page = await newPage(`${app.base}/`);
-  await page.waitForSelector('#empty');
-  await page.click('#new-project');
-  await (await page.$('input#np-file')).uploadFile(fx('clip_en.mp4'));
-  await page.click('.mode[data-mode="party"]');
-  await page.click('#np-create');
-  await page.waitForSelector('#mode-badlip', { timeout: 60000 });
+test('library: a party round opens as a round, and in the studio on request', async () => {
+  const r = await app.api('POST', '/api/projects/from-path', { path: fx('clip_en.mp4'), mode: 'party' });
+  await app.waitJob(r.data.job);
+  const id = r.data.project.id;
+  const page = await newPage(`${app.base}/#/p/${id}`);
+  await page.waitForSelector('#party-round', { timeout: 30000 });
+  await page.click('#round-studio');
+  await page.waitForSelector('#timeline-canvas', { timeout: 30000 });
   await page.close();
 });
 
@@ -176,7 +176,7 @@ test('timeline interactions: add cue by double-click, drag it, resize, delete wi
   await page.mouse.move(box.x + 2.5 * pps, box.y + 14, { steps: 5 });
   await page.mouse.up();
   await page.keyboard.up('Shift');
-  const reg = await page.evaluate(() => window.__app.sel.region);
+  const reg = await page.evaluate(() => JSON.parse(JSON.stringify(window.__app.sel.region))); // reactive state is a proxy: copy it out
   assert.ok(reg && Math.abs(reg.end - reg.start - 1.5) < 0.15, `region ${JSON.stringify(reg)}`);
   const z0 = await page.evaluate(() => window.__app.view.pps);
   await page.click('#zoom-in');
@@ -230,7 +230,7 @@ test('no console errors across library/AI/timeline sessions', () =>
     [],
   ));
 
-test('Spanish UI: the app follows the browser language and translates studio, party hub and dialogs', async () => {
+test('Spanish UI: the app follows the browser language and translates studio and dialogs', async () => {
   const r = await app.api('POST', '/api/projects/from-path', { path: fx('clip_en.mp4'), mode: 'pro' });
   await app.waitJob(r.data.job);
   const id = r.data.project.id;

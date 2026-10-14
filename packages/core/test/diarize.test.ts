@@ -166,3 +166,62 @@ test('split a passage, give one half to another character; touching same-speaker
   assert.equal(segmentAt(fixed, 7, 's2'), -1);
   assert.equal(segs.length, 3, 'inputs are not mutated');
 });
+
+test('who says a subtitle line: the passages first, the typed name as a fallback', async () => {
+  const { speakerOfCue } = await import('../src/index.ts');
+  const speakers = {
+    list: [
+      { id: 's1', name: 'Bluey', color: '#00f', muted: false, solo: false },
+      { id: 's2', name: 'Bingo', color: '#f80', muted: false, solo: false },
+    ],
+    segments: [
+      { start: 0, end: 4, speaker: 's1' },
+      { start: 4, end: 6.2, speaker: 's2' },
+    ],
+  };
+  // subtitles made after the voices were identified carry no character: the passages say who speaks
+  assert.equal(speakerOfCue({ start: 1, end: 4, character: '' }, speakers)?.name, 'Bluey');
+  assert.equal(speakerOfCue({ start: 3.9, end: 6, character: '' }, speakers)?.name, 'Bingo', 'most of the line');
+  assert.equal(speakerOfCue({ start: 3.9, end: 6, character: 'Bluey' }, speakers)?.name, 'Bingo', 'a stale typed name loses to the passages');
+  assert.equal(speakerOfCue({ start: 9, end: 10, character: 'Bluey' }, speakers)?.name, 'Bluey', 'no passage: the typed name');
+  assert.equal(speakerOfCue({ start: 9, end: 10, character: '' }, speakers), null);
+});
+
+test('remove a character: passages gone, silence where they spoke, lines lose the name', async () => {
+  const { defaultProject, removeSpeaker, deriveDocument } = await import('../src/index.ts');
+  const p = defaultProject({ id: 'p1', name: 'Clip' });
+  p.speakers = {
+    list: [
+      { id: 's1', name: 'Bluey', color: '#00f', muted: false, solo: false },
+      { id: 's2', name: 'Bingo', color: '#f80', muted: false, solo: false },
+    ],
+    segments: [
+      { start: 0, end: 4, speaker: 's1' },
+      { start: 4, end: 6, speaker: 's2' },
+      { start: 7, end: 9, speaker: 's2' },
+    ],
+  };
+  p.cues = [
+    { id: 'a', start: 4, end: 6, text: 'Hola', character: 'Bingo', note: '' },
+    { id: 'b', start: 0, end: 4, text: 'Hey', character: 'Bluey', note: '' },
+  ];
+  removeSpeaker(p, 's2');
+  assert.deepEqual(
+    p.speakers.list.map((s) => s.id),
+    ['s1'],
+  );
+  assert.deepEqual(p.speakers.segments, [{ start: 0, end: 4, speaker: 's1' }]);
+  assert.deepEqual(p.dubbed, [
+    { start: 4, end: 6 },
+    { start: 7, end: 9 },
+  ]);
+  assert.deepEqual(
+    p.cues.map((c) => c.character),
+    ['', 'Bluey'],
+  );
+  removeSpeaker(p, 'nobody');
+  assert.equal(p.dubbed.length, 2, 'an unknown id changes nothing');
+  // a project made from the clip keeps the silence
+  const child = deriveDocument({ ...p, template: true }, defaultProject({ id: 'p2', name: 'Child' }));
+  assert.deepEqual(child.dubbed, p.dubbed);
+});

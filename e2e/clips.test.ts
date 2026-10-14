@@ -13,7 +13,6 @@ let app: TestApp;
 let browser: Browser;
 let page: Page;
 let clipId: string;
-const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 test.before(async () => {
   app = await startApp();
@@ -63,7 +62,7 @@ test('the library lists the clip with its characters; Dub derives a project that
   assert.match(await page.$eval('#projects tr.card .from-clip', (e) => e.textContent || ''), /from clip_voices/);
 });
 
-test('a clip opens for preparation only: no recording, and "Start a project" offers the three kinds', async () => {
+test('a clip opens for preparation only: no recording, and "Start a project" offers dubbing, a party and a podcast', async () => {
   await page.goto(`${app.base}/#/p/${clipId}`);
   await page.waitForSelector('#use-clip', { timeout: 30000 });
   assert.ok(await page.$('#rec.hidden'), 'no record button');
@@ -71,44 +70,52 @@ test('a clip opens for preparation only: no recording, and "Start a project" off
   assert.ok(await page.$('#clip-badge'));
   await page.click('#use-clip');
   const items = await page.$$eval('.ctxmenu .ctxlabel', (els) => els.map((e) => e.textContent));
-  assert.deepEqual(items, ['New dubbing project from this clip', 'New party project from this clip', 'New podcast project from this clip']);
+  assert.deepEqual(items, ['New dubbing project from this clip', 'Play at a party', 'New podcast project from this clip']);
   await page.keyboard.press('Escape');
 });
 
-test('party: pick the clip and a character; that voice goes silent, only its lines show; record, reveal, next player', async () => {
-  await page.goto(`${app.base}/#/party`);
-  await page.waitForSelector(`.pick-clip[data-id="${clipId}"]`);
-  await page.keyboard.press('Enter'); // the first clip is focused: sofa-friendly
-  await page.waitForSelector('.character-pick');
-  await page.type('#player-name', 'Ana');
-  await page.click('.character-pick[data-speaker="s2"]'); // Daniel
-  await page.click('#pick-start');
-  await page.waitForSelector('#perform-start', { timeout: 30000 });
-  const state = await page.evaluate(() => ({
-    name: window.__app.project.name,
-    muted: window.__app.project.speakers.list.filter((s) => s.muted).map((s) => s.name),
-    lines: window.__app.project.cues.filter((c) => c.character === 'Daniel').length,
-  }));
-  assert.equal(state.name, 'clip_voices · Ana');
-  assert.deepEqual(state.muted, ['Daniel'], 'only the chosen character is silenced');
-  await page.evaluate(() =>
-    window.__app.store.commit('fast', (p) => {
-      p.settings.preRoll = 0;
-    }),
+test('remove a character from a clip: a warning first, then its lane goes and the original is silent where it spoke', async () => {
+  await page.goto(`${app.base}/#/p/${clipId}`);
+  await page.waitForSelector('.tl-head[data-speaker="s3"]', { timeout: 30000 });
+  const project = () => page.evaluate(() => JSON.parse(JSON.stringify(window.__app.project)));
+  const fred = (await project()).speakers.segments.filter((g: { speaker: string }) => g.speaker === 's3');
+  assert.ok(fred.length > 0);
+  const remove = async (answer: boolean) => {
+    let warning = '';
+    page.once('dialog', (d) => {
+      warning = d.message();
+      void (answer ? d.accept() : d.dismiss());
+    });
+    await page.click('.tl-head[data-speaker="s3"]', { button: 'right' });
+    await page.evaluate(() => {
+      [...document.querySelectorAll<HTMLButtonElement>('.ctxmenu .ctxitem')].find((b) => b.textContent?.includes('Remove Fred'))?.click();
+    });
+    await page.waitForFunction(() => !document.querySelector('.ctxmenu'));
+    return warning;
+  };
+  // saying no changes nothing
+  assert.match(
+    await remove(false),
+    new RegExp(`Remove Fred\\? Their ${fred.length} passages are removed from the timeline and the original dialogue goes silent`),
   );
-  await page.click('#perform-start');
-  await page.waitForFunction(() => window.__app.session.state === 'recording', { timeout: 15000 });
-  await wait(1500);
-  await page.click('#perform-stop');
-  await page.waitForSelector('#next-player', { timeout: 15000 });
-  const tracks = await page.evaluate(() => window.__app.project.tracks.map((t) => ({ name: t.name, clips: t.clips.length })));
-  assert.ok(
-    tracks.some((t) => t.name === 'Ana' && t.clips === 1),
-    `the take is on Ana's track: ${JSON.stringify(tracks)}`,
+  assert.equal((await project()).speakers.list.length, 3);
+  // saying yes removes the character and leaves silence in its place
+  await remove(true);
+  await page.waitForFunction(() => !document.querySelector('.tl-head[data-speaker="s3"]'));
+  const p = await project();
+  assert.deepEqual(
+    p.speakers.list.map((s: { name: string }) => s.name),
+    ['Samantha', 'Daniel'],
   );
-  await page.click('#next-player');
-  await page.waitForSelector('#clip-list');
-  const clip = (await app.api('GET', `/api/projects/${clipId}`)).data;
-  assert.equal(clip.tracks[0].clips.length, 0, 'the library clip stays clean');
-  assert.equal(clip.speakers.list.filter((s) => s.muted).length, 0);
+  assert.ok(!p.speakers.segments.some((g: { speaker: string }) => g.speaker === 's3'), 'its passages are gone');
+  assert.deepEqual(
+    p.dubbed,
+    fred.map((g: { start: number; end: number }) => ({ start: g.start, end: g.end })),
+    'silence where it spoke',
+  );
+  assert.ok(!p.cues.some((c: { character: string }) => c.character === 'Fred'), 'lines lose its name');
+  // undo brings it back
+  await page.evaluate(() => window.__app.store.undo());
+  assert.equal((await project()).speakers.list.length, 3);
+  assert.deepEqual((await project()).dubbed, []);
 });

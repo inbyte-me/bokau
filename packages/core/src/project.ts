@@ -14,6 +14,10 @@ export interface TimeRange {
   end: number;
 }
 
+/** One piece of a montage: a stretch of the source, or this many seconds of black and silence. */
+export type MediaPart = TimeRange | { gap: number };
+export const isGap = (p: MediaPart): p is { gap: number } => 'gap' in p;
+
 export interface Thumbs {
   file: string;
   count: number;
@@ -101,7 +105,10 @@ export interface Take {
   duration: number;
   createdAt?: string;
   label?: string;
-  [extra: string]: unknown;
+  /** latency compensation applied when it was recorded */
+  latencyMs?: number;
+  /** the cue it was recorded for */
+  cueId?: string | null;
 }
 
 export interface Track {
@@ -191,6 +198,8 @@ export interface Project {
   };
   speakers: { list: Speaker[]; segments: SpeakerSegment[] };
   markers: Marker[];
+  /** original dialogue silenced in these ranges whatever the speaker (lines re-recorded in a party room) */
+  dubbed: TimeRange[];
   podcast: PodcastSettings;
   /** a clip in the library (prepared once, never recorded on); projects are derived from it */
   template: boolean;
@@ -244,6 +253,7 @@ export function defaultProject({ id, name = 'Untitled', mode = 'pro' }: { id: st
     settings: { preRoll: 3, preRollBeep: true, monitor: false, muteOriginalWhileRecording: false, output: 'headphones' },
     speakers: { list: [], segments: [] },
     markers: [],
+    dubbed: [],
     podcast: { trim: null, chapters: [], clean: { rumble: true, denoise: false, compress: true }, loudnorm: true, format: 'mp3' },
     template: false,
     sourceTemplateId: null,
@@ -317,6 +327,7 @@ export function migrate(input: ProjectInput): Project {
   out.settings = { ...d.settings, ...p.settings };
   out.party = { ...d.party, ...p.party };
   out.speakers = { list: p.speakers?.list || [], segments: p.speakers?.segments || [] };
+  out.dubbed = p.dubbed || [];
   out.podcast = { ...d.podcast, ...p.podcast, clean: { ...d.podcast.clean, ...p.podcast?.clean } };
   out.tracks = (p.tracks?.length ? p.tracks : d.tracks).map((t, i) => ({ ...newTrack({ index: i }), ...t, clips: t.clips || [], takes: t.takes || [] }));
   out.stems = p.stems || d.stems;
@@ -345,7 +356,8 @@ export function summarize(p: Project): ProjectSummary {
 }
 
 /**
- * The prepared work a new project inherits from a library clip: subtitles, characters (voices back on), lip flaps,
+ * The prepared work a new project inherits from a library clip: subtitles, characters (voices back on), silenced
+ * ranges, lip flaps,
  * marks, how the original plays. Recordings never come along; a derived project starts with one empty voice track.
  */
 export function deriveDocument(clip: Project, p: Project): Project {
@@ -357,6 +369,8 @@ export function deriveDocument(clip: Project, p: Project): Project {
     lipFlaps: structuredClone(clip.lipFlaps),
     markers: structuredClone(clip.markers),
     speakers: { list: clip.speakers.list.map((s) => ({ ...s, muted: false, solo: false })), segments: structuredClone(clip.speakers.segments) },
+    // where a removed character spoke, the original stays silent
+    dubbed: structuredClone(clip.dubbed ?? []),
     original: { ...structuredClone(clip.original), mute: false, solo: false },
     sourceTemplateId: clip.id,
   };

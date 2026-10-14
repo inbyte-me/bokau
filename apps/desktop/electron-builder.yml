@@ -9,6 +9,8 @@ files:
 extraResources:
   - from: ../web/dist
     to: web
+  - from: ../play/dist
+    to: play
   - from: dist/drizzle
     to: drizzle
 asarUnpack:

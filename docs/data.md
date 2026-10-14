@@ -12,6 +12,8 @@ data/                         (DOBLAJE_DATA; desktop: OS user-data folder)
     takes/take_<id>.wav       recordings (immutable; clips reference them)
     renders/{mix,bg,dry,wet}.wav   browser-rendered export inputs
     exports/<stamp>/…         export results
+  sounds/<id>.m4a             background audio (AAC, loudness-normalised)
+  tls/party-tls.json          the party listener's self-signed certificate
 models/                       cached speech models (Hugging Face proxy)
 ```
 
@@ -20,6 +22,7 @@ models/                       cached speech models (Hugging Face proxy)
 |---|---|---|
 | `projects` | `id`, `name`, `mode`, `created_at`, `updated_at`, `document` (JSON), `media` (JSON), `stems` (JSON), `template`, `source_template_id` | index on `updated_at` (library order) and `template`; `template = 1` rows are library clips |
 | `ai_calls` | `id`, `at`, `model`, `task`, `cost_usd`, `tokens` | the spend cap is `sum(cost_usd)` |
+| `sounds` | `id`, `name`, `duration`, `created_at` | background audio for party rooms; files in `sounds/<id>.m4a` |
 | `meta` | `key`, `value` | installation facts |
 
 The **project document** (cues, tracks, clips, takes, mix settings, speakers, markers, podcast options) is one JSON
@@ -33,6 +36,11 @@ on. `derive()` creates a dubbing, party or podcast project from one: the media f
 no extra disk; a copy only across volumes), the prepared work is copied (`deriveDocument()` in core: cues, characters
 with voices back on, lip flaps, marks), recordings never come along, and `source_template_id` remembers the origin.
 Deleting a clip leaves its projects playable (their links keep the bytes).
+
+**Party rounds** are party projects derived from a clip; when the round ends, `compileRound()` writes one track per
+cast part with its takes and `dubbed` ranges (the original voice is silenced exactly there; removing a character
+adds its passages there too, and projects derived from a clip inherit them). Rooms themselves live in
+memory: a party is an evening, not data.
 
 Jobs (ingest/stems/export progress) are in memory on purpose: they belong to a running ffmpeg/Demucs process.
 
