@@ -1,7 +1,17 @@
-# Only used with `docker compose --profile caddy up -d`; behind your own reverse proxy see nginx.conf.example.
-# HTTPS for the party server: Caddy obtains and renews the certificate for {$DOMAIN} by itself.
-# WebSockets (/party/ws) pass through untouched; takes and the result are streamed, not buffered.
-{$DOMAIN} {
+# Caddy inside the compose stack, behind another proxy (Dokploy's Traefik): Traefik owns ports 80/443 and the Let's Encrypt
+# certificate and hands plain HTTP to this Caddy, which compresses, caps uploads and proxies to the app. The app serves the phone
+# app, the API, the WebSocket (/party/ws) and the rooms' media (behind room tokens, so Caddy does not serve files itself).
+{
+	# Traefik terminates TLS: Caddy must not try to get certificates of its own
+	auto_https off
+	servers {
+		# believe Traefik's X-Forwarded-For / -Proto (it is on a private network) and append to them, so the app can still
+		# tell who the visitor is: client, traefik (that is TRUST_PROXY=2 on the app, one per hop)
+		trusted_proxies static private_ranges
+	}
+}
+
+:80 {
 	encode zstd gzip
 	request_body {
 		max_size 700MB

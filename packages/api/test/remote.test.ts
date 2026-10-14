@@ -253,3 +253,18 @@ test('party server: when everyone has left, the room and the media made for it a
     await srv.close();
   }
 });
+
+test('behind two proxies (Dokploy’s Traefik, then Caddy) the visitor is the address two hops from the end, and cannot be spoofed', async () => {
+  const srv = await startApp({ mode: 'party', party: { createsPerHour: 1, trustProxy: 2 } });
+  try {
+    const open = (xff: string) => srv.api('POST', '/api/party/rooms', undefined, { 'x-forwarded-for': xff });
+    // Traefik saw the visitor (203.0.113.7) and Caddy appended Traefik's address: "visitor, traefik"
+    assert.equal((await open('203.0.113.7, 172.18.0.3')).status, 201);
+    assert.equal((await open('203.0.113.7, 172.18.0.3')).status, 429, 'the same visitor is limited');
+    assert.equal((await open('198.51.100.9, 172.18.0.3')).status, 201, 'another visitor behind the same proxy is not');
+    // a visitor who sends their own X-Forwarded-For only adds to the front: the address two hops from the end is still theirs
+    assert.equal((await open('1.2.3.4, 203.0.113.7, 172.18.0.3')).status, 429, 'a spoofed first entry changes nothing');
+  } finally {
+    await srv.close();
+  }
+});

@@ -1,19 +1,23 @@
-# A party server on your own domain.
-#   1. copy .env.example to .env and set DOMAIN (and OPENROUTER_API_KEY if you want the AI); or export them in the shell
-#   2. put your prepared clips in the data volume (docs/deployment.md, "Clips")
-#   3. docker compose up -d                       the app listens on 127.0.0.1:5177 for YOUR reverse proxy (nginx, Traefik…)
-#      docker compose --profile caddy up -d       …or also run Caddy here, which gets and renews the certificate by itself
-#      (for Caddy: point DOMAIN's DNS at this machine and open ports 80 and 443)
+# The party server behind Dokploy (or any proxy that terminates HTTPS and talks plain HTTP to this stack):
+#
+#   client ──HTTPS──▶ Traefik (Dokploy: certificate, ports 80/443) ──HTTP──▶ caddy:80 ──▶ app:5177
+#
+# In Dokploy: create a Compose service from this repository, set the environment (below), and add a domain in its Domains
+# tab: host bokau.askn.us, service `caddy`, port 80, HTTPS on (Let's Encrypt). Nothing here publishes a host port.
+# Environment: DOMAIN (required) and the optional settings below; Dokploy's Environment tab (or a .env next to this file)
+# provides them, and `${NAME}` interpolation passes each one to the app. Nothing is copied into the image.
+#
+# Locally: `docker compose -f docker-compose.yml -f docker-compose.local.yml up --build`, then http://localhost:8080/play/
 services:
   app:
     build: .
     restart: unless-stopped
-    # every setting is read from the environment compose runs in (the shell, or the .env next to this file) with ${NAME}
-    # interpolation: nothing is copied into the image, and a variable left unset takes the default after `:-`
+    # every setting is read from the environment compose runs in with ${NAME} interpolation; a variable left unset takes
+    # the default after `:-`
     environment:
       DOBLAJE_MODE: party
-      PARTY_URL: https://${DOMAIN:?set DOMAIN in .env}
-      TRUST_PROXY: "1"          # Caddy is one hop in front
+      PARTY_URL: https://${DOMAIN:?set DOMAIN (bokau.askn.us)}
+      TRUST_PROXY: ${TRUST_PROXY:-2}   # two hops in front: Traefik, then Caddy (see deploy/Caddyfile)
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}   # the AI; empty: the offline generators are used
       SPEND_CAP_USD: ${SPEND_CAP_USD:-3.5}
       OPENROUTER_MODEL: ${OPENROUTER_MODEL:-qwen/qwen3.7-flash}
@@ -34,24 +38,19 @@ services:
       PARTY_JOIN_URL: ${PARTY_JOIN_URL:-}
     volumes:
       - party-data:/data
-    ports:
-      - "127.0.0.1:${APP_PORT:-5177}:5177"   # only this machine: the reverse proxy in front is the way in
+    expose:
+      - "5177"
   caddy:
-    profiles: ["caddy"]
     image: caddy:2
     restart: unless-stopped
     depends_on:
       - app
-    environment:
-      DOMAIN: ${DOMAIN:?set DOMAIN in .env}
-    ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp"
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
       - caddy-config:/config
+    expose:
+      - "80"
 volumes:
   party-data:
   caddy-data:

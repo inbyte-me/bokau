@@ -1,0 +1,6 @@
+# Only for trying the stack on your own machine (adds a port; Dokploy must not use this file):
+#   docker compose -f docker-compose.yml -f docker-compose.local.yml up --build     →  http://localhost:8080/play/
+services:
+  caddy:
+    ports:
+      - "127.0.0.1:8080:80"

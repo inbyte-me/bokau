@@ -14,23 +14,34 @@ invite link on their phones; one of them creates the room and hosts it from thei
 | Media of a room | kept as projects in the library | deleted when everyone has left |
 | Clips | the library | the library in the data folder (see *Clips*) |
 
-## The quick way: Docker Compose (behind your reverse proxy, or with Caddy)
-1. Point a DNS record for your domain (this project's: `bokau.askn.us`) at the machine.
-2. `cp .env.example .env` and set `DOMAIN=party.example.com` (and `OPENROUTER_API_KEY` for the AI; without it the
-   offline generators are used). Compose reads these from its own environment (the shell, or that `.env`) with `${NAME}`
-   interpolation, so the same variables work from a CI secret store; the key stays on the server.
-3. Put your prepared clips in the data volume (see *Clips*).
-4. `docker compose up -d`. The app listens on `127.0.0.1:5177` only: your reverse proxy is the way in. **Caddy** listens on 80/443,
-   gets the certificate and proxies everything to the app, which serves the phone app, the API and the media (those stay behind room
-   tokens, so Caddy does not serve files itself): `deploy/Caddyfile.host` for Caddy on the host, `deploy/Caddyfile` for the compose
-   profile. (An nginx example,
-   with WebSockets, large uploads and `X-Forwarded-*`, is `deploy/nginx.conf.example`; get the certificate with certbot or
-   whatever your proxy uses). No proxy yet? `docker compose --profile caddy up -d` runs Caddy too, which gets and renews the
-   Let's Encrypt certificate by itself (open ports 80 and 443).
+## The way it is deployed: Dokploy → Caddy → the app
+```
+client ──HTTPS──▶ Traefik (Dokploy: ports 80/443, the Let's Encrypt certificate) ──HTTP──▶ caddy:80 ──▶ app:5177
+```
+* **Dokploy's Traefik** owns the domain and the certificate. **Caddy**, in the compose stack, gets plain HTTP from it
+  (`auto_https off`: it must not request certificates of its own), compresses, caps uploads at 700 MB and proxies to the app.
+* **The app** serves the phone app, the API, the room's WebSocket (`/party/ws`) and the media. The media stays in the app on
+  purpose: it is behind room tokens, and a sealed clip's working copy is decrypted there. Caddy does not serve files.
+* **Two hops, so `TRUST_PROXY=2`** (the compose default): Caddy trusts the `X-Forwarded-*` headers Traefik sends
+  (`trusted_proxies` in `deploy/Caddyfile`) and appends to them, and the app reads the visitor's address two entries from the
+  end. The per-address limits depend on this: a wrong number makes everyone share one address (too strict) or lets visitors
+  choose theirs (no limit).
 
-Check: `https://bokau.askn.us/healthz` answers `{"ok":true,"mode":"party",…}`, and `https://bokau.askn.us/play/`
-opens the phone app. (The image and the compose file were written alongside the code and are not run by the tests:
-build once on your machine before relying on them.)
+Set up:
+1. DNS: `bokau.askn.us` points at the Dokploy server.
+2. Dokploy → Create service → **Compose** → this repository (`docker-compose.yml`).
+3. Environment (Dokploy's Environment tab): `DOMAIN=bokau.askn.us` (required), `OPENROUTER_API_KEY`, and for accounts
+   `AUTH_PROVIDER=workos`, `WORKOS_API_KEY`, `WORKOS_CLIENT_ID`, `WORKOS_COOKIE_PASSWORD`, plus `LIBRARY_KEY` (docs/accounts.md).
+   Use the **production** WorkOS keys here. Everything else has a default; the full list is below.
+4. Dokploy → the service's **Domains** tab → add `bokau.askn.us`, service **`caddy`**, port **80**, HTTPS on (Let's Encrypt).
+   Nothing in the compose file publishes a host port, so nothing collides with Traefik.
+5. Put your prepared clips in the `party-data` volume (see *Clips*), then deploy.
+
+Check: `https://bokau.askn.us/healthz` answers `{"ok":true,"mode":"party",…}`, and `https://bokau.askn.us/play/` opens the phone app.
+To try the stack on your own machine: `docker compose -f docker-compose.yml -f docker-compose.local.yml up --build`, then
+`http://localhost:8080/play/` (that file adds the one local port; do not use it in Dokploy). The image and the compose file are
+not run by the tests: build once before relying on them. Other proxies: `deploy/nginx.conf.example`, `deploy/Caddyfile.host`
+(Caddy straight on a host, getting its own certificate).
 
 ## Without Docker
 ```
@@ -50,7 +61,7 @@ certificate and key you obtained, e.g. from Let's Encrypt).
 | `PORT`, `HOST` | `5177`, `0.0.0.0` (party) | where it listens |
 | `PARTY_URL` | – | the public address; invite links use it |
 | `PARTY_JOIN_URL` | – | invite link template for a phone app served elsewhere, e.g. `https://play.example.com/?room={code}` |
-| `TRUST_PROXY` | `0` | proxies in front; their `X-Forwarded-For` is believed this many hops (limits are per address) |
+| `TRUST_PROXY` | `0` (compose: `2`) | proxies in front; their `X-Forwarded-For` is believed this many hops (limits are per address) |
 | `TLS_CERT`, `TLS_KEY` | – | serve HTTPS directly |
 | `PARTY_ORIGINS` | – | other origins allowed to use the API and sockets (a phone app on a CDN), comma separated |
 | `PARTY_MAX_ROOMS` | `20` | rooms open at once |
