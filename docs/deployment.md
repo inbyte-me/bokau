@@ -17,7 +17,8 @@ invite link on their phones; one of them creates the room and hosts it from thei
 ## The quick way: Docker Compose + Caddy
 1. Point a DNS record for your domain (`party.example.com`) at the machine, and open ports 80 and 443.
 2. `cp .env.example .env` and set `DOMAIN=party.example.com` (and `OPENROUTER_API_KEY` for the AI; without it the
-   offline generators are used). The key stays on the server.
+   offline generators are used). Compose reads these from its own environment (the shell, or that `.env`) with `${NAME}`
+   interpolation, so the same variables work from a CI secret store; the key stays on the server.
 3. Put your prepared clips in the data volume (see *Clips*).
 4. `docker compose up -d`. Caddy gets and renews the certificate by itself; the app is not reachable except through it.
 

@@ -1,17 +1,29 @@
 # A party server on your own domain with automatic HTTPS (Caddy gets and renews the certificate).
 #   1. point DOMAIN's DNS A/AAAA record at this machine, open ports 80 and 443
-#   2. copy .env.example to .env and set DOMAIN (and OPENROUTER_API_KEY if you want the AI)
+#   2. copy .env.example to .env and set DOMAIN (and OPENROUTER_API_KEY if you want the AI); or export them in the shell
 #   3. put your prepared clips in the data volume (docs/deployment.md, "Clips")
 #   4. docker compose up -d
 services:
   app:
     build: .
     restart: unless-stopped
-    env_file: .env
+    # every setting is read from the environment compose runs in (the shell, or the .env next to this file) with ${NAME}
+    # interpolation: nothing is copied into the image, and a variable left unset takes the default after `:-`
     environment:
       DOBLAJE_MODE: party
       PARTY_URL: https://${DOMAIN:?set DOMAIN in .env}
       TRUST_PROXY: "1"          # Caddy is one hop in front
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}   # the AI; empty: the offline generators are used
+      SPEND_CAP_USD: ${SPEND_CAP_USD:-3.5}
+      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-qwen/qwen3.7-flash}
+      OPENROUTER_FALLBACK_MODEL: ${OPENROUTER_FALLBACK_MODEL:-anthropic/claude-haiku-5.5}
+      PARTY_MAX_ROOMS: ${PARTY_MAX_ROOMS:-20}
+      PARTY_CREATES_PER_HOUR: ${PARTY_CREATES_PER_HOUR:-12}
+      PARTY_EMPTY_ROOM_MINUTES: ${PARTY_EMPTY_ROOM_MINUTES:-5}
+      PARTY_RETENTION_HOURS: ${PARTY_RETENTION_HOURS:-24}
+      PARTY_TRANSCRIBE: ${PARTY_TRANSCRIBE:-}
+      PARTY_ORIGINS: ${PARTY_ORIGINS:-}
+      PARTY_JOIN_URL: ${PARTY_JOIN_URL:-}
     volumes:
       - party-data:/data
     expose:
