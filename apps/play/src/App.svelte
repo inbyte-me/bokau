@@ -3,6 +3,7 @@
 <script lang="ts">
   import { PartyClient, type PlayerView } from '@doblaje/party';
   import { t } from '@doblaje/ui/i18n';
+  import { onMount } from 'svelte';
   import { forgetToken, loadHostKey, loadName, loadToken, saveHostKey, saveName, saveToken } from './identity.ts';
   import Join from './Join.svelte';
   import Room from './Room.svelte';
@@ -18,6 +19,22 @@
   let client = $state<PartyClient<PlayerView> | null>(null);
   let error = $state('');
   const renderer = new MixRender();
+  /** who is hosting here, and whether a room needs a sign-in (the server decides: a laptop's rooms are anonymous) */
+  let me = $state<{ loginRequired: boolean; person: { id: string; name: string } | null }>({ loginRequired: false, person: null });
+  onMount(() => {
+    fetch(serverUrl('/api/me'), { credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((m: typeof me | null) => {
+        if (!m) return;
+        me = m;
+        if (m.person && !name) name = m.person.name;
+      })
+      .catch(() => {});
+  });
+  /** go and sign in, and come back to this page */
+  const signIn = () => {
+    location.href = serverUrl(`/auth/login?return=${encodeURIComponent(location.pathname + location.search)}`);
+  };
 
   function join(nextCode: string, nextName?: string) {
     client?.close();
@@ -60,9 +77,12 @@
   /** Open a room from this phone (no TV needed): the server gives its code and the key that makes this phone the host. */
   async function create(nextName: string) {
     error = '';
+    if (nextName) saveName(seat, nextName);
+    if (me.loginRequired && !me.person) return signIn();
     try {
-      const r = await fetch(serverUrl('/api/party/rooms'), { method: 'POST' });
-      const body = (await r.json()) as { code?: string; hostKey?: string; error?: string };
+      const r = await fetch(serverUrl('/api/party/rooms'), { method: 'POST', credentials: 'include' });
+      const body = (await r.json()) as { code?: string; hostKey?: string; error?: string; code_?: string };
+      if (r.status === 401) return signIn(); // the session ended meanwhile
       if (!r.ok || !body.code || !body.hostKey) throw new Error(body.error ?? `HTTP ${r.status}`);
       saveHostKey(body.code, seat, body.hostKey);
       join(body.code, nextName);
@@ -86,6 +106,6 @@
   {#if client}
     <Room {client} {code} token={token ?? ''} onleave={leave} {renderer} />
   {:else}
-    <Join {code} {name} {error} onjoin={join} oncreate={create} />
+    <Join {code} {name} {error} onjoin={join} oncreate={create} loginRequired={me.loginRequired} person={me.person} />
   {/if}
 </main>

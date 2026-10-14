@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import type { AiConfig } from '@doblaje/ai';
 import type { MediaConfig } from '@doblaje/media';
+import { masterKeyFrom } from './library/vault.ts';
 
 /** Repository root when running from source (apps and packages live under it). */
 export const REPO_ROOT = path.resolve(import.meta.dirname, '..', '..', '..');
@@ -13,6 +14,12 @@ export const REPO_ROOT = path.resolve(import.meta.dirname, '..', '..', '..');
  * party API and the rooms' media, never the studio (see docs/deployment.md).
  */
 export type ServerMode = 'studio' | 'party';
+
+/** Accounts for the people who host rooms (see docs/accounts.md). `none`: anonymous rooms and an open library (the default). */
+export interface AuthConfig {
+  provider: 'none' | 'dev' | 'workos';
+  workos: { apiKey: string; clientId: string; cookiePassword: string; redirectUri: string } | null;
+}
 
 export interface PartyConfig {
   /** HTTPS port phones join on (all interfaces); null: no party listener (phones cannot join from the Wi-Fi) */
@@ -62,6 +69,9 @@ export interface AppConfig {
   /** the party listener's self-signed certificate */
   tlsDir: string;
   party: PartyConfig;
+  auth: AuthConfig;
+  /** the master key that wraps each library clip's data key (null: the library is not encrypted) */
+  libraryKey: Buffer | null;
   /** browser builds of transformers.js and onnxruntime-web, served to the speech worker */
   vendorDirs: { transformers: string; ort: string };
   host: string;
@@ -71,7 +81,8 @@ export interface AppConfig {
   ai: AiConfig;
 }
 
-export type ConfigOverrides = Partial<Omit<AppConfig, 'media' | 'ai' | 'party'>> & {
+export type ConfigOverrides = Partial<Omit<AppConfig, 'media' | 'ai' | 'party' | 'auth'>> & {
+  auth?: Partial<AuthConfig>;
   media?: Partial<MediaConfig>;
   party?: Partial<PartyConfig>;
   ai?: Partial<AiConfig>;
@@ -136,6 +147,20 @@ export function loadConfig(o: ConfigOverrides = {}): AppConfig {
       aiFallback: env.PARTY_AI_FALLBACK || 'deepseek/deepseek-v4.1-flash',
       transcribe: env.PARTY_TRANSCRIBE === '1',
       ...o.party,
+    },
+    libraryKey: o.libraryKey !== undefined ? o.libraryKey : masterKeyFrom({ key: env.LIBRARY_KEY, file: env.LIBRARY_KEY_FILE }),
+    auth: {
+      provider: env.AUTH_PROVIDER === 'workos' || env.AUTH_PROVIDER === 'dev' ? env.AUTH_PROVIDER : 'none',
+      workos:
+        env.WORKOS_API_KEY && env.WORKOS_CLIENT_ID
+          ? {
+              apiKey: env.WORKOS_API_KEY,
+              clientId: env.WORKOS_CLIENT_ID,
+              cookiePassword: env.WORKOS_COOKIE_PASSWORD ?? '',
+              redirectUri: env.WORKOS_REDIRECT_URI || `${(env.PARTY_URL ?? 'http://localhost:5177').replace(/\/$/, '')}/auth/callback`,
+            }
+          : null,
+      ...o.auth,
     },
     vendorDirs: o.vendorDirs || defaultVendorDirs(),
     host: o.host || env.HOST || (mode === 'party' ? '0.0.0.0' : '127.0.0.1'),

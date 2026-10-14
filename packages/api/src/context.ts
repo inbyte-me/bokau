@@ -1,7 +1,8 @@
-import type { IncomingMessage } from 'node:http';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { OpenRouter } from '@doblaje/ai';
 import type { ProjectRepository } from '@doblaje/core';
-import type { Db, SoundRepository } from '@doblaje/db';
+import type { Db, SoundRepository, UserRepository } from '@doblaje/db';
+import type { Auth, Person } from './auth/index.ts';
 import type { AppConfig } from './config.ts';
 import type { Jobs } from './jobs.ts';
 import type { PartyHub } from './party/hub.ts';
@@ -13,6 +14,10 @@ export interface AppContext {
   projects: ProjectRepository;
   sounds: SoundRepository;
   party: PartyHub;
+  auth: Auth;
+  users: UserRepository;
+  /** who is hosting: the signed-in person (renewing their session cookie when the provider did), or null */
+  personOf(req: IncomingMessage, res: ServerResponse): Promise<Person | null>;
   /** where phones join (https://<lan-ip>:<port>, or the configured public URL); null until listening */
   partyBase(): string | null;
   jobs: Jobs;

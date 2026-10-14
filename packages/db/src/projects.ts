@@ -44,13 +44,22 @@ function fromRow(r: Row): Project {
 /** Files a derived project shares with its library clip (read-only media; recordings are never shared). */
 const SHARED_MEDIA = /^(source\.\w+|proxy\.mp4|poster\.jpg|thumbs\.jpg|audio_orig\.wav|audio_16k\.wav|stem_dialogue\.wav|stem_bg\.wav)$/;
 
+/** What the repository needs from the library's vault (see the api package): whether a clip is stored encrypted, and a way to open it. */
+export interface ClipVault {
+  isSealed(dir: string): boolean;
+  /** decrypt the files of a sealed clip whose names pass `keep` into another folder */
+  open(from: string, to: string, keep: (name: string) => boolean): void;
+}
+
 /** Projects in SQLite; their media files in `<projectsDir>/<id>/`. */
 export class SqliteProjectRepository implements ProjectRepository {
   readonly db: Db;
   readonly projectsDir: string;
-  constructor(db: Db, projectsDir: string) {
+  readonly #vault: ClipVault | null;
+  constructor(db: Db, projectsDir: string, vault: ClipVault | null = null) {
     this.db = db;
     this.projectsDir = projectsDir;
+    this.#vault = vault;
     fs.mkdirSync(projectsDir, { recursive: true });
   }
 
@@ -116,6 +125,12 @@ export class SqliteProjectRepository implements ProjectRepository {
     const p = this.create({ name: name || clip.name, mode });
     const from = this.dir(clip.id);
     const to = this.dir(p.id);
+    if (fs.existsSync(path.join(from, 'sealed.json'))) {
+      // a library clip kept encrypted: the round gets a decrypted working copy (deleted with the round), never a link
+      if (!this.#vault?.isSealed(from)) throw new AppError(500, 'this clip is sealed and the server has no library key');
+      this.#vault.open(from, to, (name) => SHARED_MEDIA.test(name));
+      return this.save(deriveDocument(clip, p));
+    }
     for (const f of fs.readdirSync(from).filter((x) => SHARED_MEDIA.test(x))) {
       try {
         fs.linkSync(path.join(from, f), path.join(to, f)); // same bytes, no extra disk space

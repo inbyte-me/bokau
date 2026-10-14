@@ -67,6 +67,8 @@ interface Entry {
   asked: Set<string>;
   /** contests already handed to the AI (round, contest) */
   filled: Set<string>;
+  /** who opened the room (null: nobody signed in): its library is theirs */
+  ownerId: string | null;
   /** players that showed the host key (their token may then use the host's HTTP routes) */
   hosts: Set<string>;
   /** the round projects made for this room (deleted with it when the room empties, if the server is set to) */
@@ -81,6 +83,10 @@ export interface HubDeps {
   sounds: SoundRepository;
   /** the address phones open for a room (the QR code) */
   joinUrl(code: string): string;
+  /** the content of a file of a library clip (the library may keep it encrypted) */
+  clipFile?: (clipId: string, name: string) => Buffer;
+  /** may this host (null: an anonymous room) play this library clip? */
+  mayUseClip?: (ownerId: string | null, clipId: string) => boolean;
   /** minutes after the last person leaves before the room and every file made for it are deleted (undefined: kept) */
   emptyRoomMinutes?: number;
   /** rooms open at once (default 20) */
@@ -147,7 +153,7 @@ export class PartyHub {
   }
 
   /** A new room for the TV. The host key proves later that a socket is that TV. */
-  create(): { code: string; hostKey: string; joinUrl: string } {
+  create({ ownerId = null }: { ownerId?: string | null } = {}): { code: string; hostKey: string; joinUrl: string } {
     this.#collect();
     if (this.#rooms.size >= (this.#deps.maxRooms ?? MAX_ROOMS)) throw new AppError(503, 'too many party rooms are open');
     let code = '';
@@ -164,6 +170,7 @@ export class PartyHub {
       compiling: false,
       asked: new Set(),
       filled: new Set(),
+      ownerId,
       hosts: new Set(),
       projectIds: new Set(),
       emptyTimer: null,
@@ -325,6 +332,7 @@ export class PartyHub {
       case 'pick-clip': {
         const clip = projects.get(String(cmd.clipId));
         if (!clip.template) throw new RoomError('Pick a clip from the library');
+        if (!(this.#deps.mayUseClip?.(entry.ownerId, clip.id) ?? true)) throw new RoomError('That clip is not in your library');
         if (!clip.media?.ready) throw new RoomError('This clip is still being prepared');
         const s = scriptOf(clip);
         if (!s.lines.length) throw new RoomError('This clip has no lines with characters yet. Prepare it first: subtitles and voices.');
@@ -673,7 +681,7 @@ export class PartyHub {
     const { projects } = this.#deps;
     return projects
       .list({ template: true })
-      .filter((c) => c.ready)
+      .filter((c) => c.ready && (this.#deps.mayUseClip?.(this.#entry(code).ownerId, c.id) ?? true))
       .map((c) => ({ c, script: scriptOf(projects.get(c.id)) }))
       .filter((x) => x.script.lines.length > 0)
       .map(({ c, script }) => ({
@@ -686,11 +694,11 @@ export class PartyHub {
   }
 
   /** A library clip's poster, for a phone that belongs to the room. */
-  posterFile(code: string, token: string | null | undefined, clipId: string): string {
+  poster(code: string, token: string | null | undefined, clipId: string): Buffer {
     this.player(code, token);
     const clip = this.#deps.projects.get(clipId);
-    if (!clip.template || !clip.media?.ready) throw new AppError(404, 'not found');
-    return this.#deps.projects.file(clipId, 'poster.jpg');
+    if (!clip.template || !clip.media?.ready || !(this.#deps.mayUseClip?.(this.#entry(code).ownerId, clipId) ?? true)) throw new AppError(404, 'not found');
+    return (this.#deps.clipFile ?? ((id, name) => fs.readFileSync(this.#deps.projects.file(id, name))))(clipId, 'poster.jpg');
   }
 
   /**

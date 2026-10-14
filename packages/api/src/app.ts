@@ -6,16 +6,20 @@ import path from 'node:path';
 import type { Duplex } from 'node:stream';
 import { composeText, OpenRouter, rewrite, suggestLine, trailerCopy, trailerCopyOffline } from '@doblaje/ai';
 import { AppError, errorMessage, isGap } from '@doblaje/core';
-import { AiLedger, closeDatabase, isProjectId, isSoundId, openDatabase, SoundRepository, SqliteProjectRepository } from '@doblaje/db';
+import { AiLedger, closeDatabase, isProjectId, isSoundId, openDatabase, SoundRepository, SqliteProjectRepository, UserRepository } from '@doblaje/db';
 import { assembleMedia, cutMedia, exec, runExport } from '@doblaje/media';
+import { devAuth } from './auth/dev.ts';
+import { type Auth, noAuth, SESSION_COOKIE, setCookie } from './auth/index.ts';
+import { workosAuth } from './auth/workos.ts';
 import { type ConfigOverrides, loadConfig } from './config.ts';
 import type { AppContext } from './context.ts';
 import { serveHf } from './hf.ts';
 import { json, safeFileName, safeJoin, serveFile } from './http.ts';
 import { Jobs } from './jobs.ts';
+import { createVault } from './library/vault.ts';
 import { PartyHub } from './party/hub.ts';
 import { lanAddresses } from './party/net.ts';
-import { partyCreateRoutes, partyHostRoutes, partyPlayerRoutes, partyToken } from './party/routes.ts';
+import { authRoutes, partyCreateRoutes, partyHostRoutes, partyPlayerRoutes, partyToken } from './party/routes.ts';
 import { ensureCertificate } from './party/tls.ts';
 import { createTranscriber } from './party/transcribe.ts';
 import { RateLimit } from './ratelimit.ts';
@@ -51,8 +55,21 @@ export async function createApp(overrides: ConfigOverrides = {}): Promise<App> {
   const cfg = loadConfig(overrides);
   fs.mkdirSync(cfg.dataDir, { recursive: true });
   const db = openDatabase({ file: cfg.dbFile, migrationsFolder: cfg.migrationsDir });
-  const projects = new SqliteProjectRepository(db, cfg.projectsDir);
+  const vault = cfg.libraryKey ? createVault(cfg.libraryKey) : null;
+  const projects = new SqliteProjectRepository(db, cfg.projectsDir, vault);
   const sounds = new SoundRepository(db, cfg.soundsDir);
+  const users = new UserRepository(db);
+  const auth: Auth =
+    cfg.auth.provider === 'workos'
+      ? workosAuth(
+          cfg.auth.workos ??
+            (() => {
+              throw new Error('AUTH_PROVIDER=workos needs WORKOS_API_KEY, WORKOS_CLIENT_ID and WORKOS_COOKIE_PASSWORD');
+            })(),
+        )
+      : cfg.auth.provider === 'dev'
+        ? devAuth()
+        : noAuth;
   let ffmpegVersion = '';
   try {
     ffmpegVersion = (await exec(cfg.media.ffmpeg, ['-version'])).stdout.toString().split('\n')[0];
@@ -93,7 +110,11 @@ export async function createApp(overrides: ConfigOverrides = {}): Promise<App> {
   const party = new PartyHub({
     projects,
     sounds,
+    // a clip's file, whether the library keeps it in the clear or sealed (a poster)
+    clipFile: (clipId, name) => (vault?.isSealed(projects.dir(clipId)) ? vault.read(projects.dir(clipId), name) : fs.readFileSync(projects.file(clipId, name))),
     maxRooms: cfg.party.maxRooms,
+    // a clip is private to its owner (the starter pack, which nobody owns, is for every host)
+    mayUseClip: (ownerId, clipId) => users.mayUse(clipId, ownerId),
     // a party server forgets a room's media when everyone has left (a studio keeps its rounds as projects)
     ...(cfg.mode === 'party' ? { emptyRoomMinutes: cfg.party.emptyRoomMinutes } : {}),
     clientIp,
@@ -146,6 +167,16 @@ export async function createApp(overrides: ConfigOverrides = {}): Promise<App> {
     projects,
     sounds,
     party,
+    auth,
+    users,
+    personOf: async (req, res) => {
+      const who = await auth.resolve(req).catch(() => null);
+      if (who?.cookie) {
+        const secure = !!cfg.party.tls || (cfg.party.publicUrl ?? '').startsWith('https:');
+        res.setHeader('set-cookie', setCookie(SESSION_COOKIE, who.cookie, { secure, maxAgeSeconds: 30 * 86400 }));
+      }
+      return who?.person ?? null;
+    },
     partyBase,
     jobs: new Jobs(),
     ai,
@@ -164,6 +195,7 @@ export async function createApp(overrides: ConfigOverrides = {}): Promise<App> {
   const lanRouter = new Router();
   partyPlayerRoutes(lanRouter, ctx);
   partyCreateRoutes(lanRouter, ctx); // a phone may open a room (limited per address): no TV needed
+  authRoutes(lanRouter, ctx);
   const vendor = cfg.vendorDirs;
 
   // ---------------------------------------------------------------- shared by both listeners
@@ -184,7 +216,9 @@ export async function createApp(overrides: ConfigOverrides = {}): Promise<App> {
     if (p.startsWith('/party/')) {
       const [, , code, kind, ...rest] = p.split('/');
       if (kind === 'clips' && rest.length === 2 && rest[1] === 'poster.jpg' && isProjectId(rest[0])) {
-        serveFile(req, res, party.posterFile(code, partyToken(req, url), rest[0]), { cache: 'public, max-age=3600' });
+        const poster = party.poster(code, partyToken(req, url), rest[0]);
+        res.writeHead(200, { 'content-type': 'image/jpeg', 'content-length': poster.length, 'cache-control': 'private, max-age=3600' });
+        res.end(req.method === 'HEAD' ? undefined : poster);
         return true;
       }
       if (kind !== 'media') throw new AppError(404, 'not found');
@@ -277,7 +311,7 @@ export async function createApp(overrides: ConfigOverrides = {}): Promise<App> {
       res.end();
       return;
     }
-    if (p.startsWith('/api/')) {
+    if (p.startsWith('/api/') || p.startsWith('/auth/')) {
       if (await lanRouter.handle(req, res, url)) return;
       throw new AppError(404, 'not found');
     }

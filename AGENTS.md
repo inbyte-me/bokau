@@ -73,7 +73,9 @@ Browser packages never import Node packages (types shared through `core` and `pa
 - Right-click: app menu only where there are relevant actions (`registerMenu` from `@doblaje/ui`), native menu on text
   fields and links, nothing elsewhere. Shared actions live in `apps/web/src/features/actions.ts`.
 - Long work (ffmpeg, Demucs) runs as a job: return `202 { job }`, report progress through the `Progress` callback.
-- Schema changes go through Drizzle migrations; never edit a generated migration that has been committed.
+- Schema changes go through Drizzle migrations made by drizzle-kit only: `pnpm db:generate --name <x>`, or `--custom` for raw SQL
+  (never a folder or `snapshot.json` written by hand: the snapshots are the chain). Never edit a committed migration; run
+  `pnpm db:check`.
 - The API binds to localhost and rejects foreign Host/Origin headers. Keep it that way; the OpenRouter key never reaches the browser.
   The party listener (HTTPS on the LAN, or the whole server with `DOBLAJE_MODE=party`) serves only the phone app and
   token-guarded player routes: never add studio routes to it (`docs/party.md#security`, `docs/deployment.md`).

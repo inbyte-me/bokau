@@ -14,15 +14,18 @@ invite link on their phones; one of them creates the room and hosts it from thei
 | Media of a room | kept as projects in the library | deleted when everyone has left |
 | Clips | the library | the library in the data folder (see *Clips*) |
 
-## The quick way: Docker Compose + Caddy
-1. Point a DNS record for your domain (`party.example.com`) at the machine, and open ports 80 and 443.
+## The quick way: Docker Compose (behind your reverse proxy, or with Caddy)
+1. Point a DNS record for your domain (this project's: `bokau.askn.us`) at the machine.
 2. `cp .env.example .env` and set `DOMAIN=party.example.com` (and `OPENROUTER_API_KEY` for the AI; without it the
    offline generators are used). Compose reads these from its own environment (the shell, or that `.env`) with `${NAME}`
    interpolation, so the same variables work from a CI secret store; the key stays on the server.
 3. Put your prepared clips in the data volume (see *Clips*).
-4. `docker compose up -d`. Caddy gets and renews the certificate by itself; the app is not reachable except through it.
+4. `docker compose up -d`. The app listens on `127.0.0.1:5177` only: your reverse proxy is the way in (an nginx example,
+   with WebSockets, large uploads and `X-Forwarded-*`, is `deploy/nginx.conf.example`; get the certificate with certbot or
+   whatever your proxy uses). No proxy yet? `docker compose --profile caddy up -d` runs Caddy too, which gets and renews the
+   Let's Encrypt certificate by itself (open ports 80 and 443).
 
-Check: `https://party.example.com/healthz` answers `{"ok":true,"mode":"party",…}`, and `https://party.example.com/play/`
+Check: `https://bokau.askn.us/healthz` answers `{"ok":true,"mode":"party",…}`, and `https://bokau.askn.us/play/`
 opens the phone app. (The image and the compose file were written alongside the code and are not run by the tests:
 build once on your machine before relying on them.)
 
@@ -30,7 +33,7 @@ build once on your machine before relying on them.)
 ```
 pnpm install --frozen-lockfile
 pnpm --filter @doblaje/play build          # the phone app (the studio app is not needed)
-DOBLAJE_MODE=party PARTY_URL=https://party.example.com TRUST_PROXY=1 node apps/server/src/main.ts
+DOBLAJE_MODE=party PARTY_URL=https://bokau.askn.us TRUST_PROXY=1 node apps/server/src/main.ts
 ```
 Needs Node 24.11+ and `ffmpeg`. Put any reverse proxy with HTTPS in front (nginx, Caddy, a platform's router): it must
 pass WebSockets (`/party/ws`), allow large request bodies (takes, the mix: 700 MB) and not buffer or time out them

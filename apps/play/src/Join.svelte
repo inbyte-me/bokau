@@ -10,8 +10,11 @@
     onjoin: (code: string, name: string) => void;
     /** open a room of my own (I will be its host) */
     oncreate: (name: string) => void;
+    /** hosting needs a sign-in on this server */
+    loginRequired?: boolean;
+    person?: { id: string; name: string } | null;
   }
-  let { code, name, error, onjoin, oncreate }: Props = $props();
+  let { code, name, error, onjoin, oncreate, loginRequired = false, person = null }: Props = $props();
   // editable copies, seeded once from the props
   let roomCode = $state(untrack(() => code));
   let myName = $state(untrack(() => name));
@@ -51,8 +54,11 @@
   {#if error}<p class="error" role="alert">{error}</p>{/if}
   <button id="join" class="primary big" type="submit" disabled={!valid}>{t('Join')}</button>
   <p class="or">{t('or')}</p>
-  <button id="create-room" class="big" type="button" disabled={!named} onclick={() => oncreate(myName.trim())}>{t('Create a room')}</button>
+  <button id="create-room" class="big" type="button" disabled={!named && !(loginRequired && !person)} onclick={() => oncreate(myName.trim())}>
+    {loginRequired && !person ? t('Sign in to create a room') : t('Create a room')}
+  </button>
   <p class="hint">{t('You will host it from this phone and play too. Share the link with your friends.')}</p>
+  {#if person}<p class="hint">{t('Signed in as {name}.', { name: person.name })} <a href="/auth/logout">{t('Sign out')}</a></p>{/if}
 </form>
 
 <style>

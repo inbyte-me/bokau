@@ -58,3 +58,28 @@ export const meta = sqliteTable('meta', {
   key: text().primaryKey(),
   value: text().notNull(),
 });
+
+/**
+ * A person who hosts party rooms (guests have no account). The id is the identity provider's own (a WorkOS user id):
+ * we keep no password and no email, only what the library needs.
+ */
+export const users = sqliteTable('users', {
+  id: text().primaryKey(),
+  name: text().notNull(),
+  createdAt: text('created_at').notNull(),
+  lastSeenAt: text('last_seen_at').notNull(),
+});
+
+/**
+ * Who a library clip belongs to. A clip nobody owns is part of the starter pack every host may pick from; an owned clip
+ * is private: only its owner's rooms can play it, and the other people in those rooms only see what the room streams.
+ */
+export const clipOwners = sqliteTable(
+  'clip_owners',
+  {
+    clipId: text('clip_id').primaryKey(),
+    ownerId: text('owner_id').notNull(),
+    createdAt: text('created_at').notNull(),
+  },
+  (t) => [index('clip_owners_owner_idx').on(t.ownerId)],
+);

@@ -1068,4 +1068,7 @@ export const es: Record<string, string> = {
   'Headphones off. Here comes the dub. If there is a TV, look at it.': 'Sin audífonos. Aquí viene el doblaje. Si hay una tele, mírala.',
   'Preparing the result…': 'Preparando el resultado…',
   'Could not prepare the result: {error}': 'No se pudo preparar el resultado: {error}',
+  'Sign in to create a room': 'Inicia sesión para crear una sala',
+  'Signed in as {name}.': 'Sesión iniciada como {name}.',
+  'Sign out': 'Cerrar sesión',
 };

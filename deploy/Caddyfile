@@ -1,3 +1,4 @@
+# Only used with `docker compose --profile caddy up -d`; behind your own reverse proxy see nginx.conf.example.
 # HTTPS for the party server: Caddy obtains and renews the certificate for {$DOMAIN} by itself.
 # WebSockets (/party/ws) pass through untouched; takes and the result are streamed, not buffered.
 {$DOMAIN} {

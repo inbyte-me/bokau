@@ -59,3 +59,8 @@ Commit the generated folder. Never edit a migration that has been committed; add
 `node:sqlite` (built into Node 24 and into Electron 44's Node) with `drizzle-orm/node-sqlite`: no native module to
 rebuild per Electron version. Drizzle's node-sqlite driver ships in the 1.0 release candidates, pinned to an exact
 version in the workspace catalog. See [ADR 0003](adr/0003-sqlite-with-drizzle.md).
+
+## Accounts and library ownership
+`users` (provider id, display name, timestamps: no password, no email) and `clip_owners` (library clip → owner; a clip with no
+row belongs to the starter pack every host may use). A sealed clip's folder holds `*.enc` files and `sealed.json` (the wrapped
+data key and a hash per file) instead of the plain files. See [accounts.md](accounts.md).

@@ -27,6 +27,7 @@
     "db:check": "pnpm --filter @doblaje/db check",
     "fixtures": "node packages/testkit/src/make-fixtures.ts",
     "doctor": "node scripts/doctor.ts",
+    "library": "node packages/api/src/library-cli.ts",
     "probe:models": "node packages/ai/src/probe-cli.ts",
     "setup:separation": "bash scripts/setup-separation.sh",
     "watch:hardware": "node scripts/watch-hardware.ts"

@@ -17,6 +17,7 @@
     "@doblaje/media": "workspace:*",
     "@doblaje/party": "workspace:*",
     "@huggingface/transformers": "catalog:",
+    "@workos-inc/node": "^11.0.0",
     "selfsigned": "5.5.0",
     "ws": "8.21.3"
   },

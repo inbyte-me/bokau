@@ -1,8 +1,9 @@
-# A party server on your own domain with automatic HTTPS (Caddy gets and renews the certificate).
-#   1. point DOMAIN's DNS A/AAAA record at this machine, open ports 80 and 443
-#   2. copy .env.example to .env and set DOMAIN (and OPENROUTER_API_KEY if you want the AI); or export them in the shell
-#   3. put your prepared clips in the data volume (docs/deployment.md, "Clips")
-#   4. docker compose up -d
+# A party server on your own domain.
+#   1. copy .env.example to .env and set DOMAIN (and OPENROUTER_API_KEY if you want the AI); or export them in the shell
+#   2. put your prepared clips in the data volume (docs/deployment.md, "Clips")
+#   3. docker compose up -d                       the app listens on 127.0.0.1:5177 for YOUR reverse proxy (nginx, Traefik…)
+#      docker compose --profile caddy up -d       …or also run Caddy here, which gets and renews the certificate by itself
+#      (for Caddy: point DOMAIN's DNS at this machine and open ports 80 and 443)
 services:
   app:
     build: .
@@ -17,6 +18,11 @@ services:
       SPEND_CAP_USD: ${SPEND_CAP_USD:-3.5}
       OPENROUTER_MODEL: ${OPENROUTER_MODEL:-qwen/qwen3.7-flash}
       OPENROUTER_FALLBACK_MODEL: ${OPENROUTER_FALLBACK_MODEL:-anthropic/claude-haiku-5.5}
+      AUTH_PROVIDER: ${AUTH_PROVIDER:-}                    # workos: hosting a room needs a sign-in (see docs/accounts.md)
+      WORKOS_API_KEY: ${WORKOS_API_KEY:-}
+      WORKOS_CLIENT_ID: ${WORKOS_CLIENT_ID:-}
+      WORKOS_COOKIE_PASSWORD: ${WORKOS_COOKIE_PASSWORD:-}
+      LIBRARY_KEY: ${LIBRARY_KEY:-}                      # wraps each clip's data key; openssl rand -base64 32 (docs/accounts.md)
       PARTY_AI_MODEL: ${PARTY_AI_MODEL:-nvidia/nemotron-3-ultra-550b-a55b:free}   # party games: a free model first…
       PARTY_AI_FALLBACK: ${PARTY_AI_FALLBACK:-deepseek/deepseek-v4.1-flash}        # …then a cheap one that tolerates crude players
       PARTY_MAX_ROOMS: ${PARTY_MAX_ROOMS:-20}
@@ -28,9 +34,10 @@ services:
       PARTY_JOIN_URL: ${PARTY_JOIN_URL:-}
     volumes:
       - party-data:/data
-    expose:
-      - "5177"
+    ports:
+      - "127.0.0.1:${APP_PORT:-5177}:5177"   # only this machine: the reverse proxy in front is the way in
   caddy:
+    profiles: ["caddy"]
     image: caddy:2
     restart: unless-stopped
     depends_on:
