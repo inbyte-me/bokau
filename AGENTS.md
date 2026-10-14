@@ -77,8 +77,10 @@ Browser packages never import Node packages (types shared through `core` and `pa
   (never a folder or `snapshot.json` written by hand: the snapshots are the chain). Never edit a committed migration; run
   `pnpm db:check`.
 - The API binds to localhost and rejects foreign Host/Origin headers. Keep it that way; the OpenRouter key never reaches the browser.
-  The party listener (HTTPS on the LAN, or the whole server with `DOBLAJE_MODE=party`) serves only the phone app and
-  token-guarded player routes: never add studio routes to it (`docs/party.md#security`, `docs/deployment.md`).
+  The Wi-Fi listener (HTTPS on the LAN) serves only the phone app and token-guarded player routes: never add studio
+  routes to it (`docs/party.md#security`). A party server (`DOBLAJE_MODE=party`) serves the studio only to a signed-in person,
+  from a workspace of their own (`packages/api/src/workspace.ts`: their database, projects, sounds, jobs, AI budget); a
+  route must never name another person's workspace, and the OpenRouter key must never reach a browser (`docs/accounts.md`).
 - Party game rules live in the pure reducer `packages/party/src/room.ts`; the hub only does I/O around it. The backend
   runs the room whatever the clients are (TV, phone host, phone guest): clients have capabilities, never run the game,
   and draw the public board the server sends (`boardOf`).

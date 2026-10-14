@@ -5,7 +5,7 @@ import type { AddressInfo } from 'node:net';
 import path from 'node:path';
 import type { Duplex } from 'node:stream';
 import { composeText, OpenRouter, rewrite, suggestLine, trailerCopy, trailerCopyOffline } from '@doblaje/ai';
-import { AppError, errorMessage, isGap } from '@doblaje/core';
+import { AppError, errorMessage, isGap, type ProjectRepository } from '@doblaje/core';
 import { AiLedger, closeDatabase, isProjectId, isSoundId, openDatabase, SoundRepository, SqliteProjectRepository, UserRepository } from '@doblaje/db';
 import { assembleMedia, cutMedia, exec, runExport } from '@doblaje/media';
 import { devAuth } from './auth/dev.ts';
@@ -17,7 +17,7 @@ import { serveHf } from './hf.ts';
 import { json, safeFileName, safeJoin, serveFile } from './http.ts';
 import { Jobs } from './jobs.ts';
 import { createVault } from './library/vault.ts';
-import { PartyHub } from './party/hub.ts';
+import { type Library, PartyHub } from './party/hub.ts';
 import { lanAddresses } from './party/net.ts';
 import { authRoutes, partyCreateRoutes, partyHostRoutes, partyPlayerRoutes, partyToken } from './party/routes.ts';
 import { ensureCertificate } from './party/tls.ts';
@@ -27,6 +27,7 @@ import { Router } from './router.ts';
 import { projectRoutes } from './routes/projects.ts';
 import { soundRoutes } from './routes/sounds.ts';
 import { aiRoutes, systemRoutes } from './routes/system.ts';
+import { type Workspace, type WorkspaceParts, Workspaces } from './workspace.ts';
 
 /** Files of a project folder that may be fetched by the browser. */
 const MEDIA_FILES =
@@ -99,26 +100,26 @@ export async function createApp(overrides: ConfigOverrides = {}): Promise<App> {
   // party games write for guests who are crude on purpose: their own pair of models (a free one first, then a cheap one
   // that does not refuse), on the same key, ledger and spend cap
   const partyAi = new OpenRouter({ ...cfg.ai, defaultModel: cfg.party.aiModel, fallbackModel: cfg.party.aiFallback }, ledger);
+  // the shared library of a laptop (rooms nobody signed in to); a server of accounts gives each host their own workspace
+  const sharedLibrary: Library = { projects, sounds };
   const party = new PartyHub({
-    projects,
-    sounds,
+    library: (ownerId) => (ownerId && auth.required ? workspaces.get(ownerId) : sharedLibrary),
     // a clip's file, whether the library keeps it in the clear or sealed (a poster)
-    clipFile: (clipId, name) => (vault?.isSealed(projects.dir(clipId)) ? vault.read(projects.dir(clipId), name) : fs.readFileSync(projects.file(clipId, name))),
+    clipFile: (lib, clipId, name) =>
+      vault?.isSealed(lib.projects.dir(clipId)) ? vault.read(lib.projects.dir(clipId), name) : fs.readFileSync(lib.projects.file(clipId, name)),
     maxRooms: cfg.party.maxRooms,
-    // a clip is private to its owner (the starter pack, which nobody owns, is for every host)
-    mayUseClip: (ownerId, clipId) => users.mayUse(clipId, ownerId),
     // a party server forgets a room's media when everyone has left (a studio keeps its rounds as projects)
     ...(cfg.mode === 'party' ? { emptyRoomMinutes: cfg.party.emptyRoomMinutes } : {}),
     clientIp,
     ...(cfg.party.transcribe ? { transcribe: createTranscriber(cfg.media, cfg.modelsDir) } : {}),
     // the finished round as one file: the host's rendered mix over the round's picture (burning the subtitles in)
-    render: async (id, { subtitles }) => {
-      const out = await runExport(cfg.media, projects, id, { profile: 'quick', format: 'mp4', burnSubs: subtitles, subtitles: false });
+    render: async (lib, id, { subtitles }) => {
+      const out = await runExport(cfg.media, lib.projects, id, { profile: 'quick', format: 'mp4', burnSubs: subtitles, subtitles: false });
       const made = out.files.find((f) => f.endsWith('.mp4'));
       if (!made) return null;
-      fs.copyFileSync(path.join(projects.dir(id), 'exports', out.dir, made), projects.file(id, 'result.mp4'));
-      fs.rmSync(path.join(projects.dir(id), 'exports', out.dir), { recursive: true, force: true });
-      fs.rmSync(projects.file(id, 'renders/mix.wav'), { force: true });
+      fs.copyFileSync(path.join(lib.projects.dir(id), 'exports', out.dir, made), lib.projects.file(id, 'result.mp4'));
+      fs.rmSync(path.join(lib.projects.dir(id), 'exports', out.dir), { recursive: true, force: true });
+      fs.rmSync(lib.projects.file(id, 'renders/mix.wav'), { force: true });
       return 'result.mp4';
     },
     joinUrl: (code) => `${partyBase() ?? ''}/play/?room=${code}`,
@@ -136,17 +137,17 @@ export async function createApp(overrides: ConfigOverrides = {}): Promise<App> {
       return Object.fromEntries(r.lines.map((l) => [l.id, { text: l.text, direction: l.direction }]));
     },
     // the result is the dubbed slice: its project's media is cut down to it (the media pipeline owns `media`)
-    cut: async (id, parts) => {
-      const p = projects.get(id);
+    cut: async (lib, id, parts) => {
+      const p = lib.projects.get(id);
       if (!p.media) return;
       const [only] = parts;
       const media =
         parts.length === 1 && !isGap(only)
-          ? await cutMedia(cfg.media, projects.dir(id), p.media, only)
-          : await assembleMedia(cfg.media, projects.dir(id), p.media, parts);
-      const fresh = projects.get(id);
+          ? await cutMedia(cfg.media, lib.projects.dir(id), p.media, only)
+          : await assembleMedia(cfg.media, lib.projects.dir(id), p.media, parts);
+      const fresh = lib.projects.get(id);
       fresh.media = media;
-      projects.save(fresh);
+      lib.projects.save(fresh);
     },
     // trailer games: texts nobody wrote, and the words around the trailer (never blocks: the offline copy is the floor)
     compose: (input) => (partyAi.status().configured ? composeText(partyAi, input) : Promise.resolve(null)),
@@ -160,6 +161,9 @@ export async function createApp(overrides: ConfigOverrides = {}): Promise<App> {
     party,
     auth,
     users,
+    get workspaces() {
+      return workspaces;
+    },
     personOf: async (req, res) => {
       const who = await auth.resolve(req).catch(() => null);
       if (who?.cookie) {
@@ -188,6 +192,36 @@ export async function createApp(overrides: ConfigOverrides = {}): Promise<App> {
   partyCreateRoutes(lanRouter, ctx); // a phone may open a room (limited per address): no TV needed
   authRoutes(lanRouter, ctx);
   const vendor = cfg.vendorDirs;
+  // a server of accounts: every signed-in person has a studio of their own (the same routes the desktop app uses), answering
+  // from their workspace only. Uploads are capped per person, there is no `from-path`, and their AI budget is their own.
+  const workspaces = new Workspaces({
+    cfg,
+    vault,
+    build: (w: WorkspaceParts) => {
+      const mine: AppContext = {
+        ...ctx,
+        cfg: { ...cfg, maxUploadBytes: cfg.party.userUploadBytes },
+        db: w.db,
+        projects: w.projects,
+        sounds: w.sounds,
+        jobs: w.jobs,
+        ai: w.ai,
+        localOnly: false,
+      };
+      const r = new Router();
+      systemRoutes(r, mine);
+      aiRoutes(r, mine);
+      projectRoutes(r, mine);
+      soundRoutes(r, mine);
+      return r;
+    },
+  });
+  /** the signed-in person's workspace (null: nobody signed in, or accounts are off) */
+  const workspaceOf = async (req: IncomingMessage, res: ServerResponse): Promise<Workspace | null> => {
+    if (!auth.required) return null;
+    const who = await ctx.personOf(req, res);
+    return who ? workspaces.get(who.id) : null;
+  };
 
   // ---------------------------------------------------------------- shared by both listeners
   /** The phone app, the round's media for phones, background sounds. Returns false when the path is not one of these. */
@@ -225,11 +259,29 @@ export async function createApp(overrides: ConfigOverrides = {}): Promise<App> {
     if (p.startsWith('/sounds/')) {
       const m = /^\/sounds\/(s[a-f0-9]{10})\.m4a$/.exec(p);
       if (!m || !isSoundId(m[1])) throw new AppError(404, 'not found');
-      if (lan && !party.knows(partyToken(req, url))) throw new AppError(403, 'join a room first');
-      serveFile(req, res, sounds.file(m[1]), { cache: 'public, max-age=86400' });
+      // a phone in a room gets its room's library's sounds (with its token); the owner's studio plays their own
+      const token = partyToken(req, url);
+      const own = token
+        ? party.soundFile(token, m[1])
+        : lan && auth.required
+          ? ((await workspaceOf(req, res))?.sounds.file(m[1]) ?? null)
+          : lan
+            ? null
+            : sounds.file(m[1]);
+      if (!own) throw new AppError(lan ? 403 : 404, lan ? 'join a room first' : 'not found');
+      serveFile(req, res, own, { cache: 'private, max-age=86400' });
       return true;
     }
     return false;
+  }
+
+  /** A project's file for the studio (the picture, the audio, the takes, the exports), from the given library. */
+  function serveMedia(repo: ProjectRepository, req: IncomingMessage, res: ServerResponse, p: string) {
+    const [, , id, ...rest] = p.split('/');
+    const name = rest.join('/');
+    if (!isProjectId(id) || !MEDIA_FILES.test(name) || name.includes('..')) throw new AppError(404, 'not found');
+    const download = name.startsWith('exports/') ? path.basename(name) : name.startsWith('source.') ? originalName(repo, id, name) : undefined;
+    return serveFile(req, res, path.join(repo.dir(id), name), { download });
   }
 
   // ---------------------------------------------------------------- local listener
@@ -249,13 +301,7 @@ export async function createApp(overrides: ConfigOverrides = {}): Promise<App> {
     }
     if (req.method !== 'GET' && req.method !== 'HEAD') throw new AppError(404, 'not found');
     if (await servePartyFiles(req, res, url, p, { lan: false })) return;
-    if (p.startsWith('/media/')) {
-      const [, , id, ...rest] = p.split('/');
-      const name = rest.join('/');
-      if (!isProjectId(id) || !MEDIA_FILES.test(name) || name.includes('..')) throw new AppError(404, 'not found');
-      const download = name.startsWith('exports/') ? path.basename(name) : name.startsWith('source.') ? originalName(id, name) : undefined;
-      return serveFile(req, res, path.join(projects.dir(id), name), { download });
-    }
+    if (p.startsWith('/media/')) return serveMedia(projects, req, res, p);
     if (p.startsWith('/hf/')) return serveHf(cfg.modelsDir, req, res, p.slice(4));
     if (p.startsWith('/vendor/transformers/')) return serveFile(req, res, safeJoin(vendor.transformers, p.slice(21)), { cache: VENDOR_CACHE });
     if (p.startsWith('/vendor/ort/')) return serveFile(req, res, safeJoin(vendor.ort, p.slice(12)), { cache: VENDOR_CACHE });
@@ -290,15 +336,45 @@ export async function createApp(overrides: ConfigOverrides = {}): Promise<App> {
     }
     if (p.startsWith('/api/') || p.startsWith('/auth/')) {
       if (await lanRouter.handle(req, res, url)) return;
+      // the rest of /api is the person's own studio: only for someone signed in, on their own workspace
+      if (p.startsWith('/api/') && auth.required) {
+        const ws = await workspaceOf(req, res);
+        if (!ws) throw new AppError(401, 'sign in to use your library', 'login');
+        if (req.method === 'POST') ws.assertSpace(); // uploads, recordings, renders: while there is room
+        if (await ws.router.handle(req, res, url)) return;
+      }
       throw new AppError(404, 'not found');
     }
     if (req.method !== 'GET' && req.method !== 'HEAD') throw new AppError(404, 'not found');
     if (await servePartyFiles(req, res, url, p, { lan: true })) return;
+    // the studio app and what it loads (the picture of their clips, the speech models): signed-in people only
+    if (auth.required && (p === '/studio' || p.startsWith('/studio/') || p.startsWith('/media/') || p.startsWith('/hf/') || p.startsWith('/vendor/'))) {
+      const ws = await workspaceOf(req, res);
+      if (!ws) {
+        if (p.startsWith('/studio')) {
+          res.writeHead(302, { location: `/auth/login?return=${encodeURIComponent('/studio/')}`, 'cache-control': 'no-store' });
+          return void res.end();
+        }
+        throw new AppError(401, 'sign in to use your library', 'login');
+      }
+      if (p.startsWith('/media/')) return serveMedia(ws.projects, req, res, p);
+      if (p.startsWith('/hf/')) return serveHf(cfg.modelsDir, req, res, p.slice(4));
+      if (p.startsWith('/vendor/transformers/')) return serveFile(req, res, safeJoin(vendor.transformers, p.slice(21)), { cache: VENDOR_CACHE });
+      if (p.startsWith('/vendor/ort/')) return serveFile(req, res, safeJoin(vendor.ort, p.slice(12)), { cache: VENDOR_CACHE });
+      if (p === '/studio') {
+        res.writeHead(301, { location: '/studio/' });
+        return void res.end();
+      }
+      if (!cfg.webDir) throw new AppError(404, 'studio app not built');
+      const f = safeJoin(cfg.webDir, p.slice('/studio/'.length) || 'index.html');
+      if (!fs.existsSync(f) || !fs.statSync(f).isFile()) return serveFile(req, res, path.join(cfg.webDir, 'index.html'));
+      return serveFile(req, res, f, { cache: p.startsWith('/studio/assets/') ? HASHED : 'no-cache' });
+    }
     throw new AppError(404, 'not found');
   }
 
-  const originalName = (id: string, name: string) => {
-    const base = projects
+  const originalName = (repo: ProjectRepository, id: string, name: string) => {
+    const base = repo
       .get(id)
       .name.normalize('NFKD')
       .replace(/[^\w.\- ]+/g, '')
@@ -382,6 +458,7 @@ export async function createApp(overrides: ConfigOverrides = {}): Promise<App> {
     close: async () => {
       if (sweeper) clearInterval(sweeper);
       party.close();
+      workspaces.close();
       const stop = (s: http.Server | https.Server | null) =>
         new Promise<void>((resolve) => {
           if (!s?.listening) return resolve();

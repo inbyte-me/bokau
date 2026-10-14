@@ -143,7 +143,7 @@ Phone (apps/play, /play/) ──wss /party/ws (token)──┘        │ derive
 
 ## Security
 * The party listener answers only `/play/…`, the player routes, `/party/<code>/media/…`, `/party/<code>/clips/…/poster.jpg`
-  and `/sounds/…`, all behind a room token; no studio API, no `/media`, no AI. A phone may open a room (limited per
+  and `/sounds/…`, all behind a room token; no studio API, no `/media`, no AI (on the Wi-Fi listener; a party server serves the studio only to signed-in people, from their own workspace: [accounts.md](accounts.md)). A phone may open a room (limited per
   address, `PARTY_CREATES_PER_HOUR`). The host's routes (the clip list, the mix upload) also need the room's host key, or
   the token of the phone that showed it. In a party server (`DOBLAJE_MODE=party`) this is the only listener.
 * Host commands need the room's host key (constant-time compare); phone actions only touch the phone's own turn.

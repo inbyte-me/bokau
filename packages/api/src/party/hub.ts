@@ -6,7 +6,7 @@ import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
 import type { ComposeInput, SuggestInput, TrailerJob } from '@doblaje/ai';
 import { AppError, clamp, errorMessage, type MediaPart, newId, type Project, type ProjectRepository, type TimeRange } from '@doblaje/core';
-import type { SoundRepository } from '@doblaje/db';
+import { isSoundId, type SoundRepository } from '@doblaje/db';
 import {
   type Action,
   boardOf,
@@ -67,8 +67,9 @@ interface Entry {
   asked: Set<string>;
   /** contests already handed to the AI (round, contest) */
   filled: Set<string>;
-  /** who opened the room (null: nobody signed in): its library is theirs */
+  /** who opened the room (null: nobody signed in) and the library it plays from: theirs */
   ownerId: string | null;
+  lib: Library;
   /** players that showed the host key (their token may then use the host's HTTP routes) */
   hosts: Set<string>;
   /** the round projects made for this room (deleted with it when the room empties, if the server is set to) */
@@ -78,15 +79,19 @@ interface Entry {
   rendering: ((file: string | null) => void) | null;
 }
 
-export interface HubDeps {
+/** A host's library: their clips and rounds, and their background sounds. A server of accounts keeps one per person. */
+export interface Library {
   projects: ProjectRepository;
   sounds: SoundRepository;
+}
+
+export interface HubDeps {
+  /** the library a room plays from: its owner's (null: nobody signed in, the shared library of a laptop) */
+  library: (ownerId: string | null) => Library;
   /** the address phones open for a room (the QR code) */
   joinUrl(code: string): string;
   /** the content of a file of a library clip (the library may keep it encrypted) */
-  clipFile?: (clipId: string, name: string) => Buffer;
-  /** may this host (null: an anonymous room) play this library clip? */
-  mayUseClip?: (ownerId: string | null, clipId: string) => boolean;
+  clipFile?: (lib: Library, clipId: string, name: string) => Buffer;
   /** minutes after the last person leaves before the room and every file made for it are deleted (undefined: kept) */
   emptyRoomMinutes?: number;
   /** rooms open at once (default 20) */
@@ -101,13 +106,13 @@ export interface HubDeps {
   /** the written lines of a written game (badlip, telenovela, genre), by cue id; {} keeps the scene's lines */
   write?: (job: ScriptJob) => Promise<Record<string, { text: string; direction?: string }>>;
   /** make a round's media out of these parts of the clip (and save it): the slice, or a trailer's scenes and gaps; without it the result keeps the whole clip */
-  cut?: (projectId: string, parts: MediaPart[]) => Promise<void>;
+  cut?: (lib: Library, projectId: string, parts: MediaPart[]) => Promise<void>;
   /** a text for a trailer contest nobody answered (a pitch, a direction, a title); null when there is none. Must not throw. */
   compose?: (input: ComposeInput) => Promise<string | null>;
   /** the transcript of a take (the server listens to what players said); null when it cannot. Must not throw. */
   transcribe?: (file: string, language: string) => Promise<string | null>;
   /** make the finished round's result file from the mix a host client rendered (`renders/mix.wav`); the file's name in the project, or null */
-  render?: (projectId: string, opts: { subtitles: boolean }) => Promise<string | null>;
+  render?: (lib: Library, projectId: string, opts: { subtitles: boolean }) => Promise<string | null>;
   /** the words around a trailer (opening card, narrator lines, critics' newspapers, tagline). Must not throw. */
   trailer?: (job: TrailerJob) => Promise<TrailerCopy>;
 }
@@ -169,6 +174,7 @@ export class PartyHub {
       asked: new Set(),
       filled: new Set(),
       ownerId,
+      lib: this.#deps.library(ownerId),
       hosts: new Set(),
       projectIds: new Set(),
       emptyTimer: null,
@@ -176,7 +182,7 @@ export class PartyHub {
     };
     this.#rooms.set(code, entry);
     this.#watchEmpty(entry); // nobody may ever come
-    this.#apply(entry, { type: 'ambience', urls: this.#deps.sounds.list().map((s) => s.url) });
+    this.#apply(entry, { type: 'ambience', urls: entry.lib.sounds.list().map((s) => s.url) });
     return { code, hostKey: entry.hostKey, joinUrl: this.#deps.joinUrl(code) };
   }
 
@@ -203,7 +209,7 @@ export class PartyHub {
     entry.rendering?.(null);
     for (const id of entry.projectIds) {
       try {
-        this.#deps.projects.remove(id);
+        entry.lib.projects.remove(id);
       } catch (e) {
         console.error('[party] could not delete a room’s media', errorMessage(e));
       }
@@ -325,12 +331,11 @@ export class PartyHub {
   }
 
   async #command(entry: Entry, cmd: HostCommand): Promise<void> {
-    const { projects } = this.#deps;
+    const { projects } = entry.lib;
     switch (cmd.type) {
       case 'pick-clip': {
         const clip = projects.get(String(cmd.clipId));
         if (!clip.template) throw new RoomError('Pick a clip from the library');
-        if (!(this.#deps.mayUseClip?.(entry.ownerId, clip.id) ?? true)) throw new RoomError('That clip is not in your library');
         if (!clip.media?.ready) throw new RoomError('This clip is still being prepared');
         const s = scriptOf(clip);
         if (!s.lines.length) throw new RoomError('This clip has no lines with characters yet. Prepare it first: subtitles and voices.');
@@ -474,18 +479,18 @@ export class PartyHub {
         await this.#compileTrailer(entry);
       } else if (room.projectId) {
         const id = room.projectId;
-        const duration = this.#deps.projects.get(id).media?.duration ?? 0;
+        const duration = entry.lib.projects.get(id).media?.duration ?? 0;
         const slice = room.slice;
         let cut: TimeRange | null = null;
         if (slice && this.#deps.cut && (slice.start > 0.05 || slice.end < duration - 0.05)) {
           try {
-            await this.#deps.cut(id, [slice]);
+            await this.#deps.cut(entry.lib, id, [slice]);
             cut = slice;
           } catch (e) {
             console.error('[party] cutting the slice failed, keeping the whole clip', errorMessage(e));
           }
         }
-        this.#deps.projects.save(compileRound(this.#deps.projects.get(id), room, cut));
+        entry.lib.projects.save(compileRound(entry.lib.projects.get(id), room, cut));
       }
       // the round as one file every client plays together (a host client renders the mix; nobody to render: no file)
       result = (await this.#render(entry)) ?? undefined;
@@ -537,8 +542,8 @@ export class PartyHub {
       critics: tr.reviews.length,
     });
     const plan = planTrailer(room, copy);
-    await this.#deps.cut?.(id, plan.parts);
-    this.#deps.projects.save(compileTrailer(this.#deps.projects.get(id), room, plan.result));
+    await this.#deps.cut?.(entry.lib, id, plan.parts);
+    entry.lib.projects.save(compileTrailer(entry.lib.projects.get(id), room, plan.result));
   }
 
   /** The server listens to a take (when it can) and tells the room what the player said. Arrives whenever it arrives. */
@@ -580,7 +585,7 @@ export class PartyHub {
   }
 
   #refreshAmbience(entry: Entry) {
-    this.#apply(entry, { type: 'ambience', urls: this.#deps.sounds.list().map((s) => s.url) });
+    this.#apply(entry, { type: 'ambience', urls: entry.lib.sounds.list().map((s) => s.url) });
   }
 
   #viewMessage(entry: Entry, conn: Conn): ServerMessage {
@@ -647,18 +652,21 @@ export class PartyHub {
     return { entry: entry.room, playerId };
   }
 
-  /** Whether a token belongs to any open room (background sounds are shared by all rooms). */
-  knows(token: string | null): boolean {
-    return !!token && [...this.#rooms.values()].some((e) => e.tokens.has(token));
+  /** A background sound of the library of the room this token belongs to (null: not a player, or no such sound). */
+  soundFile(token: string | null, soundId: string): string | null {
+    const entry = token ? [...this.#rooms.values()].find((e) => e.tokens.has(token)) : undefined;
+    if (!entry || !isSoundId(soundId)) return null;
+    const file = entry.lib.sounds.file(soundId);
+    return fs.existsSync(file) ? file : null;
   }
 
   /** The round's project, for a cast phone's audio engine. */
   project(code: string, token: string | null): Project {
     const { entry: room, playerId } = this.player(code, token);
+    const entry = this.#entry(code);
     // the cast, and the host (who renders the mix of the finished round)
-    if (!room.projectId || !(room.cast.some((c) => c.playerId === playerId) || this.#entry(code).hosts.has(playerId)))
-      throw new AppError(409, 'you are not in this round');
-    return this.#deps.projects.get(room.projectId);
+    if (!room.projectId || !(room.cast.some((c) => c.playerId === playerId) || entry.hosts.has(playerId))) throw new AppError(409, 'you are not in this round');
+    return entry.lib.projects.get(room.projectId);
   }
 
   /** Whether a request comes from the host: the room's host key, or the token of a phone that showed it. */
@@ -676,10 +684,10 @@ export class PartyHub {
     hostKey?: string | null,
   ): { id: string; name: string; duration: number; characters: string[]; lines: number }[] {
     if (!this.isHost(code, token, hostKey)) throw new AppError(403, 'only the host can pick the clip');
-    const { projects } = this.#deps;
+    const { projects } = this.#entry(code).lib;
     return projects
       .list({ template: true })
-      .filter((c) => c.ready && (this.#deps.mayUseClip?.(this.#entry(code).ownerId, c.id) ?? true))
+      .filter((c) => c.ready)
       .map((c) => ({ c, script: scriptOf(projects.get(c.id)) }))
       .filter((x) => x.script.lines.length > 0)
       .map(({ c, script }) => ({
@@ -694,9 +702,10 @@ export class PartyHub {
   /** A library clip's poster, for a phone that belongs to the room. */
   poster(code: string, token: string | null | undefined, clipId: string): Buffer {
     this.player(code, token);
-    const clip = this.#deps.projects.get(clipId);
-    if (!clip.template || !clip.media?.ready || !(this.#deps.mayUseClip?.(this.#entry(code).ownerId, clipId) ?? true)) throw new AppError(404, 'not found');
-    return (this.#deps.clipFile ?? ((id, name) => fs.readFileSync(this.#deps.projects.file(id, name))))(clipId, 'poster.jpg');
+    const { lib } = this.#entry(code);
+    const clip = lib.projects.get(clipId);
+    if (!clip.template || !clip.media?.ready) throw new AppError(404, 'not found');
+    return (this.#deps.clipFile ?? ((l, id, name) => fs.readFileSync(l.projects.file(id, name))))(lib, clipId, 'poster.jpg');
   }
 
   /**
@@ -708,11 +717,11 @@ export class PartyHub {
     const entry = this.#entry(code);
     const id = entry.room.projectId;
     if (!entry.rendering || !id || !this.#deps.render) throw new AppError(409, 'no mix is wanted now');
-    const dest = this.#deps.projects.file(id, 'renders/mix.wav');
-    fs.mkdirSync(this.#deps.projects.file(id, 'renders'), { recursive: true });
+    const dest = entry.lib.projects.file(id, 'renders/mix.wav');
+    fs.mkdirSync(entry.lib.projects.file(id, 'renders'), { recursive: true });
     try {
       await streamToFile(req, dest, MAX_MIX_BYTES);
-      const file = await this.#deps.render(id, { subtitles: entry.room.settings.mode !== 'blind' });
+      const file = await this.#deps.render(entry.lib, id, { subtitles: entry.room.settings.mode !== 'blind' });
       entry.rendering?.(file);
       if (!file) throw new AppError(500, 'could not make the result');
       return { file };
@@ -726,7 +735,7 @@ export class PartyHub {
   mediaFile(code: string, token: string | null, name: string): string {
     const { entry: room } = this.player(code, token);
     if (!room.projectId || !PHONE_MEDIA.test(name)) throw new AppError(404, 'not found');
-    return this.#deps.projects.file(room.projectId, name);
+    return this.#entry(code).lib.projects.file(room.projectId, name);
   }
 
   /**
@@ -745,8 +754,8 @@ export class PartyHub {
     const line = room.lines.find((l) => l.cueId === room.turn?.cueId);
     if (!room.projectId || !line) throw new AppError(409, 'no line to record');
     const file = `take_${newId('k')}.wav`;
-    const dest = this.#deps.projects.file(room.projectId, `takes/${file}`);
-    fs.mkdirSync(this.#deps.projects.file(room.projectId, 'takes'), { recursive: true });
+    const dest = entry.lib.projects.file(room.projectId, `takes/${file}`);
+    fs.mkdirSync(entry.lib.projects.file(room.projectId, 'takes'), { recursive: true });
     await streamToFile(req, dest, MAX_TAKE_BYTES);
     const duration = wavDuration(dest);
     if (!(duration > 0.05)) {

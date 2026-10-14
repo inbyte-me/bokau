@@ -1071,4 +1071,5 @@ export const es: Record<string, string> = {
   'Sign in to create a room': 'Inicia sesión para crear una sala',
   'Signed in as {name}.': 'Sesión iniciada como {name}.',
   'Sign out': 'Cerrar sesión',
+  'Open my library': 'Abrir mi biblioteca',
 };

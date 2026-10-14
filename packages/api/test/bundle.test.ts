@@ -8,7 +8,7 @@ import { startApp } from '@doblaje/testkit';
 import { exportClip, importClip } from '../src/library/bundle.ts';
 import { createVault } from '../src/library/vault.ts';
 
-test('a prepared clip travels as one file: exported here, imported there owned by a host and sealed, and it plays', async () => {
+test('a prepared clip travels as one file: exported here, imported there sealed, and it plays', async () => {
   const studio = await startApp();
   const key = crypto.randomBytes(32);
   const server = await startApp({ mode: 'party', libraryKey: key });
@@ -25,13 +25,12 @@ test('a prepared clip travels as one file: exported here, imported there owned b
     assert.ok(!files.some((f) => f.includes('takes') || f.includes('exports')), 'no recordings or exports in a clip');
 
     const vault = createVault(key);
-    const imported = await importClip(server.app.ctx.projects, server.app.ctx.users, vault, out, { owner: 'user_pau' });
+    const imported = await importClip(server.app.ctx.projects, vault, out);
     assert.notEqual(imported, id, 'a new clip on the server');
     const clip = server.app.ctx.projects.get(imported);
     assert.equal(clip.name, 'Heist');
     assert.equal(clip.template, true);
     assert.equal(clip.cues[0].text, 'Hola, ¿qué tal?', 'the characters and lines came along');
-    assert.equal(server.app.ctx.users.ownerOf(imported), 'user_pau');
     const dir = server.app.ctx.projects.dir(imported);
     assert.ok(vault.isSealed(dir) && !fs.existsSync(path.join(dir, 'proxy.mp4')), 'sealed on arrival');
 
@@ -59,10 +58,10 @@ test('a bundle with odd entries or no media is refused and leaves nothing behind
     fs.writeFileSync(path.join(dir, 'evil.sh'), 'x');
     await exec('tar', ['-cf', path.join(dir, 'bad.tar'), '-C', dir, 'clip.json', 'evil.sh']);
     const before = server.app.ctx.projects.list().length;
-    await assert.rejects(importClip(server.app.ctx.projects, server.app.ctx.users, null, path.join(dir, 'bad.tar')), /unexpected entry/);
+    await assert.rejects(importClip(server.app.ctx.projects, null, path.join(dir, 'bad.tar')), /unexpected entry/);
     fs.rmSync(path.join(dir, 'evil.sh'));
     await exec('tar', ['-cf', path.join(dir, 'empty.tar'), '-C', dir, 'clip.json']);
-    await assert.rejects(importClip(server.app.ctx.projects, server.app.ctx.users, null, path.join(dir, 'empty.tar')), /missing the clip/);
+    await assert.rejects(importClip(server.app.ctx.projects, null, path.join(dir, 'empty.tar')), /missing the clip/);
     assert.equal(server.app.ctx.projects.list().length, before, 'nothing was created');
   } finally {
     await server.close();

@@ -30,6 +30,10 @@ services:
       LIBRARY_KEY: ${LIBRARY_KEY:-}                      # wraps each clip's data key; openssl rand -base64 32 (docs/accounts.md)
       PARTY_AI_MODEL: ${PARTY_AI_MODEL:-nvidia/nemotron-3-ultra-550b-a55b:free}   # party games: a free model first…
       PARTY_AI_FALLBACK: ${PARTY_AI_FALLBACK:-deepseek/deepseek-v4.1-flash}        # …then a cheap one that tolerates crude players
+      USER_QUOTA_MB: ${USER_QUOTA_MB:-3000}            # what one person may keep in their library
+      USER_UPLOAD_MB: ${USER_UPLOAD_MB:-500}           # the largest single upload
+      USER_AI_CAP_USD: ${USER_AI_CAP_USD:-0.1}         # one person's AI budget in the studio (the key is shared)
+      MAX_JOBS: ${MAX_JOBS:-2}                         # heavy jobs (ffmpeg…) the whole server runs at once
       PARTY_MAX_ROOMS: ${PARTY_MAX_ROOMS:-20}
       PARTY_CREATES_PER_HOUR: ${PARTY_CREATES_PER_HOUR:-12}
       PARTY_EMPTY_ROOM_MINUTES: ${PARTY_EMPTY_ROOM_MINUTES:-5}

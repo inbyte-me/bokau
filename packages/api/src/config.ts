@@ -42,6 +42,14 @@ export interface PartyConfig {
   /** the AI the party games use (suggested lines, directions, cards, the trailer's words, written games): a free model first, then a cheap one that tolerates crude players when the free one is out of requests or fails */
   aiModel: string;
   aiFallback: string;
+  /** accounts: bytes of files one person may keep (their clips, recordings and sounds) */
+  userQuotaBytes: number;
+  /** accounts: the largest file one person may upload */
+  userUploadBytes: number;
+  /** accounts: what one person's AI use in the studio may cost, in USD (the key is the server's, shared) */
+  userAiCapUsd: number;
+  /** heavy jobs (ffmpeg, separation) the whole server runs at once */
+  maxJobs: number;
   /** the server listens to takes (speech-to-text on the server) so a room needs no TV for it */
   transcribe: boolean;
 }
@@ -134,6 +142,10 @@ export function loadConfig(o: ConfigOverrides = {}): AppConfig {
       tls: env.TLS_CERT && env.TLS_KEY ? { cert: env.TLS_CERT, key: env.TLS_KEY } : null,
       aiModel: env.PARTY_AI_MODEL || 'nvidia/nemotron-3-ultra-550b-a55b:free',
       aiFallback: env.PARTY_AI_FALLBACK || 'deepseek/deepseek-v4.1-flash',
+      userQuotaBytes: number(env.USER_QUOTA_MB, 3000) * 1024 ** 2,
+      userUploadBytes: number(env.USER_UPLOAD_MB, 500) * 1024 ** 2,
+      userAiCapUsd: number(env.USER_AI_CAP_USD, 0.1),
+      maxJobs: number(env.MAX_JOBS, 2),
       transcribe: env.PARTY_TRANSCRIBE === '1',
       ...o.party,
     },

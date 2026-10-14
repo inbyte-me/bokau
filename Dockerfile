@@ -1,14 +1,14 @@
-# A party server: rooms only (the phone app, the party API, the rooms' media), never the studio.
+# A party server: the phone app, the party API and rooms' media, plus (for signed-in people) the studio app on their own library.
 # Build:  docker build -t doblaje-party .
 # Run:    see docs/deployment.md (docker-compose.yml puts HTTPS and a domain in front of it).
 FROM node:24-bookworm-slim AS build
 RUN corepack enable
 WORKDIR /app
 COPY . .
-# only what a party server needs (not the desktop shell and its Electron download)
-RUN pnpm install --frozen-lockfile --filter @doblaje/server... --filter @doblaje/play...
-# only the phone app is needed in a party server (the studio app is for the desktop)
-RUN pnpm --filter @doblaje/play build
+# only what the server needs (not the desktop shell and its Electron download)
+RUN pnpm install --frozen-lockfile --filter @doblaje/server... --filter @doblaje/play... --filter @doblaje/web...
+# the phone app (/play/) and the studio app (/studio/, behind sign-in)
+RUN pnpm --filter @doblaje/play --filter @doblaje/web build
 
 FROM node:24-bookworm-slim
 RUN apt-get update \

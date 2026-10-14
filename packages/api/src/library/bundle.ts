@@ -1,11 +1,10 @@
 // Moving a prepared clip between machines as one file: prepared in the studio on your computer, `export`ed to a tar, copied to
-// the server and `import`ed there (owned by a host and sealed when the server has a library key). The bundle is `clip.json`
+// the server and `import`ed there (into a host's library, sealed when the server has a library key). The bundle is `clip.json`
 // (the clip's project: characters, lines, media facts) plus its media files; recordings, exports and renders are not part of a clip.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { AppError, type Project, type ProjectRepository } from '@doblaje/core';
-import type { UserRepository } from '@doblaje/db';
 import { exec } from '@doblaje/media';
 import type { Vault } from './vault.ts';
 
@@ -33,14 +32,8 @@ export async function exportClip(projects: ProjectRepository, vault: Vault | nul
   }
 }
 
-/** Unpack a bundle as a new library clip. Returns its id. */
-export async function importClip(
-  projects: ProjectRepository,
-  users: UserRepository,
-  vault: Vault | null,
-  file: string,
-  { owner = null, name }: { owner?: string | null; name?: string } = {},
-): Promise<string> {
+/** Unpack a bundle as a new clip in this library (sealed when there is a vault). Returns its id. */
+export async function importClip(projects: ProjectRepository, vault: Vault | null, file: string, { name }: { name?: string } = {}): Promise<string> {
   const work = tmp();
   try {
     await exec('tar', ['-xf', file, '-C', work]);
@@ -59,7 +52,6 @@ export async function importClip(
     try {
       for (const e of entries) if (e.name !== 'clip.json') fs.copyFileSync(path.join(work, e.name), path.join(dir, e.name));
       projects.save({ ...source, id: created.id, name: name || source.name, template: true, sourceTemplateId: null });
-      if (owner) users.claim(created.id, owner);
       if (vault) vault.seal(dir);
     } catch (e) {
       projects.remove(created.id);

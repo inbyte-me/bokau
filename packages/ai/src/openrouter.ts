@@ -86,7 +86,8 @@ export class OpenRouter {
         body: JSON.stringify(body),
       });
       const data = (await r.json().catch(() => ({}))) as ChatResponse;
-      if (!r.ok) throw new AppError(r.status === 402 ? 402 : 502, data?.error?.message || `OpenRouter ${r.status}`);
+      // whatever the provider says back, the key is never repeated in it (messages travel on to browsers)
+      if (!r.ok) throw new AppError(r.status === 402 ? 402 : 502, (data?.error?.message || `OpenRouter ${r.status}`).split(key).join('[key]'));
       const text = data.choices?.[0]?.message?.content ?? '';
       // a free model reports a cost of exactly 0: believe it (only a missing cost is estimated from the tokens)
       const cost = typeof data.usage?.cost === 'number' ? data.usage.cost : estimateCost(data.usage);

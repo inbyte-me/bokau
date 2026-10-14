@@ -17,6 +17,8 @@ export default defineConfig({
       '/party/ws': { target: API, ws: true },
     },
   },
+  // relative asset paths: the same build is served at / (the laptop and the desktop app) and at /studio/ (a server of accounts)
+  base: './',
   // audio worklets and the speech worker are ES modules
   worker: { format: 'es' },
   build: {

@@ -6,6 +6,7 @@ import type { Auth, Person } from './auth/index.ts';
 import type { AppConfig } from './config.ts';
 import type { Jobs } from './jobs.ts';
 import type { PartyHub } from './party/hub.ts';
+import type { Workspaces } from './workspace.ts';
 
 /** Everything a route needs, built once in createApp(). */
 export interface AppContext {
@@ -16,6 +17,8 @@ export interface AppContext {
   party: PartyHub;
   auth: Auth;
   users: UserRepository;
+  /** every signed-in person's own studio (a server of accounts) */
+  workspaces: Workspaces;
   /** who is hosting: the signed-in person (renewing their session cookie when the provider did), or null */
   personOf(req: IncomingMessage, res: ServerResponse): Promise<Person | null>;
   /** where phones join (https://<lan-ip>:<port>, or the configured public URL); null until listening */

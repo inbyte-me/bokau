@@ -1,7 +1,7 @@
 # Deploying a party server
 
 A **party server** runs rooms only: the phone app, the party API and the rooms' media, behind your own domain with real
-HTTPS. It never serves the studio (`DOBLAJE_MODE=party`: the studio's routes are not mounted at all). Friends open the
+HTTPS. In `DOBLAJE_MODE=party` the studio is served only to signed-in people, on a workspace of their own (docs/accounts.md); with accounts off it is not served at all. Friends open the
 invite link on their phones; one of them creates the room and hosts it from their phone, no TV needed. Decisions:
 [ADR 0009](adr/0009-party-server-and-clients-with-capabilities.md).
 
@@ -97,25 +97,23 @@ the clip and removed on its own). The show screen says so and offers **Download*
 people save what they want while they are still in the room. `PARTY_RETENTION_HOURS` removes anything left behind (a
 crash). Disk use is roughly the clip plus the takes per open round; budget for `PARTY_MAX_ROOMS` rooms.
 
-## Clips
-Preparing a clip (separating voices, subtitles, characters) uses the studio app, so do it on your own computer. A clip then
-travels as one file:
+## Clips and libraries
+On a server of accounts each person builds their own library **in the studio at `https://<domain>/studio/`** (sign in, upload a
+video, separate the voices, subtitle it, name the characters), and hosts rooms from it (docs/accounts.md). Files live under
+`<data>/users/<id>/`, which is on the `party-data` volume.
+
+A clip prepared on your own computer can be moved in instead, as one file:
 ```
-pnpm library list                                  # on your computer (the studio's data folder), the clips' ids
+pnpm library list                                  # on your computer (the studio's data folder): the clips' ids
 pnpm library export <clipId> heist.tar             # packs the clip: its lines, characters and media (no recordings)
-```
-Copy `heist.tar` to the server and import it into the running container (Dokploy: the service's terminal, or `docker exec`):
-```
 docker cp heist.tar <app container>:/tmp/heist.tar
-docker exec <app container> node packages/api/src/library-cli.ts import /tmp/heist.tar <hostUserId>
+docker exec <app container> node packages/api/src/library-cli.ts import /tmp/heist.tar --user <userId>
 docker exec <app container> rm /tmp/heist.tar
 ```
-The clip arrives owned by that host (their WorkOS user id: `user_…`, in the WorkOS dashboard, or in `pnpm library` output
-once they have signed in) and **sealed** when the server has a `LIBRARY_KEY`. Leave out the user id and it joins the
-**starter pack** every host may pick from (a sealed one too). `list` shows each clip's owner and whether it is sealed;
-`assign`, `release`, `seal` and `unseal` change those later. The host picks from the clips that are ready and have
-characters that speak. (Your computer's `pnpm library` finds the studio data folder through `DOBLAJE_DATA`, default
-`./data`; the desktop app keeps its own, `~/Library/Application Support/Doblaje Studio/data` on a Mac.)
+`<userId>` is the person's WorkOS id (`user_…`; `library users` lists the people who have a library here). The clip arrives in
+their library, sealed when the server has a `LIBRARY_KEY`; `list`, `seal` and `unseal` take `--user` too. Without `--user` the
+command works on the laptop's shared library. (The desktop app keeps its data in `~/Library/Application Support/Doblaje Studio/data`
+on a Mac; your computer's `pnpm library` uses `DOBLAJE_DATA`, default `./data`.)
 
 ## One address for everything
 The server is the only place the phone app, the API, the sockets and the media come from (one origin). There is no CDN or
@@ -123,7 +121,7 @@ second host to configure, and no CORS: a page of any other site is refused. That
 and the media guard in one place.
 
 ## Safety notes
-* Only the phones' routes exist; every room route needs the player's token, and the host's need the host key (held by the
+* The phones' routes need the player's token; the studio exists only behind a sign-in, on the signed-in person's own workspace. Every room route needs the player's token, and the host's need the host key (held by the
   phone that created the room). Tokens are random and never in a page's HTML.
 * Rooms and uploads are limited (per address, per room, per file); names are cleaned; the AI key never leaves the server.
 * Requests from another site's pages are refused (same-origin only). Security headers on every response: `nosniff`, no referrers, the microphone for the page's own origin only, HSTS over

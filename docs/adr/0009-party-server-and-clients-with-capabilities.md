@@ -26,8 +26,15 @@ picker, the transcriber and the show player at once.
 * **Shared pieces** for every client live in `@doblaje/party-ui` (game list, languages, the host's buttons) and
   `@doblaje/ui`; components there take plain props, never a host context or an API.
 
+* **A studio of your own, behind a sign-in.** On a server of accounts every person has a workspace (`<data>/users/<id>/`: a SQLite
+  file, projects, sounds, jobs, an AI ledger) and the same studio routes the desktop app uses answer from it, so isolation is
+  structural rather than a permission check. Rooms play from their owner's workspace. One OpenRouter key is shared and never
+  reaches a browser; each person has their own budget, a disk quota, an upload limit and one heavy job at a time. It is not an
+  elegant multi-tenant design (a database file per person, kept open for the life of the process, no eviction), chosen to be
+  quick and safe on one VPS.
+
 **Consequences.** The TV keeps working unchanged as a client. A room can be played with phones only, on the Wi-Fi or
 across the internet. Deploying needs only ffmpeg, a data folder with prepared clips and a proxy with HTTPS. Because
 rooms are ephemeral and media-heavy, a party server holds a room's files only while people are in it; people download
-the result on the spot. Not done yet: the TV's own boards still read the full room instead of the public board, and
-clip preparation still happens in the desktop studio.
+the result on the spot. Not done yet: the TV's own boards still read the full room instead of the public board; library clips under edit are
+stored in the clear (sealing is for finished clips, an encrypted VPS disk covers the rest); workspaces are never evicted.

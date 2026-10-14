@@ -58,7 +58,10 @@
     {loginRequired && !person ? t('Sign in to create a room') : t('Create a room')}
   </button>
   <p class="hint">{t('You will host it from this phone and play too. Share the link with your friends.')}</p>
-  {#if person}<p class="hint">{t('Signed in as {name}.', { name: person.name })} <a href="/auth/logout">{t('Sign out')}</a></p>{/if}
+  {#if person}
+    <a id="open-studio" class="studio" href="/studio/">{t('Open my library')}</a>
+    <p class="hint">{t('Signed in as {name}.', { name: person.name })} <a href="/auth/logout">{t('Sign out')}</a></p>
+  {/if}
 </form>
 
 <style>
@@ -77,6 +80,17 @@
   }
   .join .lead {
     margin: 0;
+  }
+  .studio {
+    display: block;
+    text-align: center;
+    padding: 14px;
+    border: 1px solid var(--line2);
+    border-radius: 12px;
+    background: var(--panel2);
+    color: inherit;
+    text-decoration: none;
+    font-weight: 600;
   }
   .or,
   .hint {
