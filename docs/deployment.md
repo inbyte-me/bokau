@@ -20,7 +20,10 @@ invite link on their phones; one of them creates the room and hosts it from thei
    offline generators are used). Compose reads these from its own environment (the shell, or that `.env`) with `${NAME}`
    interpolation, so the same variables work from a CI secret store; the key stays on the server.
 3. Put your prepared clips in the data volume (see *Clips*).
-4. `docker compose up -d`. The app listens on `127.0.0.1:5177` only: your reverse proxy is the way in (an nginx example,
+4. `docker compose up -d`. The app listens on `127.0.0.1:5177` only: your reverse proxy is the way in. **Caddy** listens on 80/443,
+   gets the certificate and proxies everything to the app, which serves the phone app, the API and the media (those stay behind room
+   tokens, so Caddy does not serve files itself): `deploy/Caddyfile.host` for Caddy on the host, `deploy/Caddyfile` for the compose
+   profile. (An nginx example,
    with WebSockets, large uploads and `X-Forwarded-*`, is `deploy/nginx.conf.example`; get the certificate with certbot or
    whatever your proxy uses). No proxy yet? `docker compose --profile caddy up -d` runs Caddy too, which gets and renews the
    Let's Encrypt certificate by itself (open ports 80 and 443).

@@ -1,0 +1,17 @@
+# Caddy running on the host itself (not in compose), in front of the app that listens on 127.0.0.1:5177.
+# Caddy gets and renews the Let's Encrypt certificate, serves HTTPS on 443 and passes the room's WebSocket (/party/ws) through.
+# The app serves everything else (the phone app, the API, the rooms' media: those are behind room tokens, so they stay in the app).
+# On the app: PARTY_URL=https://bokau.askn.us and TRUST_PROXY=1 (Caddy is the one hop in front).
+bokau.askn.us {
+	encode zstd gzip
+	request_body {
+		max_size 700MB
+	}
+	reverse_proxy 127.0.0.1:5177 {
+		flush_interval -1
+		transport http {
+			read_timeout 10m
+			write_timeout 10m
+		}
+	}
+}
