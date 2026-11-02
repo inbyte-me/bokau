@@ -94,9 +94,10 @@ The mix is rendered **in the browser with the same audio graph used for preview*
 
 ## Layout
 ```
-apps/      server (HTTP shell) · web (Vite frontend shell) · desktop (Electron shell)
+apps/      server (HTTP shell) · web (Svelte/Vite frontend shell) · desktop (Electron shell) · play (phone client for party rooms, served at /play/)
 packages/  core (shared domain) · db (SQLite + Drizzle) · media (ffmpeg) · ai (OpenRouter) · api (HTTP app)
-           audio (Web Audio engine) · speech (Whisper, voice id) · ui (DOM helper, icons, i18n) · testkit
+           audio (Web Audio engine) · speech (Whisper, voice id) · party (party-room state machine and wire protocol)
+           party-ui (screens shared by the TV and phones) · ui (DOM helper, icons, i18n) · testkit
 e2e/       browser tests      docs/   architecture, data, API, audio engine, ADRs
 data/      projects + doblaje.db (git-ignored)      models/   cached speech models (git-ignored)
 ```
@@ -104,3 +105,7 @@ Details: [docs/architecture.md](docs/architecture.md).
 
 ## Tests
 `pnpm test` (unit + API, ffmpeg-based), `pnpm test:e2e` (headless, muted Chrome with a synthetic microphone: offline-render audio analysis, recording, punch/loop, marks, export, party games, podcast, Spanish UI, desktop shell), `pnpm test:live` (real microphone, needs a person talking nearby). See [docs/testing.md](docs/testing.md).
+
+## License
+
+[MIT](LICENSE)
