@@ -13,7 +13,6 @@ tools/
 # secrets
 .env
 .env.*
-!.env.example
 
 # media dropped in the repo root for manual testing
 /*.mp4
@@ -23,3 +22,10 @@ tools/
 
 *.log
 .DS_Store
+
+# Secrets and credentials: never commit these
+*.pem
+*.key
+service-account*.json
+!.env.example
+!.env.sample
